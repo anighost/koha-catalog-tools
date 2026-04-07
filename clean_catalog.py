@@ -63,10 +63,16 @@ def clean_text(val):
     return re.sub(r'\s+', ' ', str(val)).strip()
 
 def invert_author_name(name):
-    """Convert 'Firstname Lastname' → 'Lastname, Firstname'. Skip if already inverted."""
+    """Convert 'Firstname Lastname' → 'Lastname, Firstname'. Skip if already inverted.
+    Strips trailing 'et al.' before inverting."""
     name = clean_text(name)
     if not name or "," in name:
         return name, False
+    # Multiple authors joined by "and" / "&" — don't invert, return as-is
+    if re.search(r'\s+and\s+|\s*&\s*', name, flags=re.IGNORECASE):
+        return name, False
+    # Remove trailing "et al." variants before inverting
+    name = re.sub(r'\s+et\.?\s+al\.?$', '', name, flags=re.IGNORECASE).strip()
     parts = name.split()
     if len(parts) > 1:
         return f"{parts[-1]}, {' '.join(parts[:-1])}", True
@@ -102,19 +108,21 @@ def clean_and_convert_isbn(text):
         return cleaned, cleaned != re.sub(r'[^0-9X]', '', original.upper()), False
 
     if len(cleaned) == 10:
-        # Validate ISBN-10 check digit
+        # Check validity but convert regardless — an invalid check digit may be a typo,
+        # and ISBN-13 form is always preferred in Koha.
+        invalid = False
         try:
             check = sum((10 - i) * (10 if c == 'X' else int(c)) for i, c in enumerate(cleaned))
             if check % 11 != 0:
-                return cleaned, False, True  # invalid check digit: return as-is, flag warning
+                invalid = True
         except ValueError:
-            return cleaned, False, True
+            invalid = True
 
         # Convert to ISBN-13
         isbn12 = "978" + cleaned[:9]
         total  = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(isbn12))
         check_digit = (10 - (total % 10)) % 10
-        return isbn12 + str(check_digit), True, False
+        return isbn12 + str(check_digit), True, invalid
 
     # Unknown format — return stripped version
     return cleaned, cleaned != re.sub(r'[^0-9X]', '', original.upper()), False
@@ -194,8 +202,16 @@ def load_session_state():
     }
 
 def save_session_state(state_dict):
+    # Read the current file first so synonym dicts are never overwritten by a stale in-memory state.
+    # Only last_primary_barcode is updated on each run.
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r', encoding='utf-8') as f:
+            on_disk = json.load(f)
+    else:
+        on_disk = {}
+    on_disk["last_primary_barcode"] = state_dict["last_primary_barcode"]
     with open(STATE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(state_dict, f, indent=4, ensure_ascii=False)
+        json.dump(on_disk, f, indent=4, ensure_ascii=False)
 
 # ==========================================
 # MAIN EXECUTION
@@ -239,9 +255,14 @@ for row_num, (index, row) in enumerate(df.iterrows()):
     row_logs = []
 
     # ── 1. AUTHOR ──────────────────────────────────────────────────────────────
-    raw_author = clean_text(row.iloc[COL_AUTHOR])
+    raw_author_full = clean_text(row.iloc[COL_AUTHOR])
 
-    # FIX: Synonym match BEFORE inversion (raw name is easier to match)
+    # Split multiple authors joined by "and" / "&" — first becomes 100$a, rest go to 700$a
+    author_parts = re.split(r'\s+and\s+|\s*&\s*', raw_author_full, flags=re.IGNORECASE)
+    raw_author      = author_parts[0].strip()
+    extra_authors_raw = [a.strip() for a in author_parts[1:] if a.strip()]
+
+    # Synonym match BEFORE inversion (raw name is easier to match)
     author_matched, author_synonymed = match_author_synonym(
         raw_author, state.get("synonyms_author", {})
     )
@@ -445,13 +466,27 @@ for row_num, (index, row) in enumerate(df.iterrows()):
                 subfields=[Subfield(code='a', value=subject)]
             ))
 
-    # 700 — Added entries (alternate names, translators, co-authors)
+    # 700 — Added entries: co-authors split from 100$a field, then cols 19-24
     seen_700 = {author_std.lower()}
+
+    # Co-authors extracted from the main author field ("X and Y" → Y goes here)
+    for extra_raw in extra_authors_raw:
+        extra_matched, _ = match_author_synonym(extra_raw, state.get("synonyms_author", {}))
+        extra_std, _ = invert_author_name(extra_matched)
+        if extra_std.lower() not in seen_700:
+            rec.add_field(Field(
+                tag='700', indicators=['1', ' '],
+                subfields=[Subfield(code='a', value=extra_std)]
+            ))
+            seen_700.add(extra_std.lower())
+
+    # Added authors from cols 19-24
     for col_idx in COL_ADDED_AUTHORS:
         added_raw = clean_text(row.iloc[col_idx])
         if not added_raw:
             continue
-        added_std, _ = invert_author_name(added_raw)
+        added_matched, _ = match_author_synonym(added_raw, state.get("synonyms_author", {}))
+        added_std, _ = invert_author_name(added_matched)
         if added_std.lower() not in seen_700:
             rec.add_field(Field(
                 tag='700', indicators=['1', ' '],
@@ -528,6 +563,13 @@ for row_num, (index, row) in enumerate(df.iterrows()):
         xl_row.iloc[COL_DATE]      = date_clean
         xl_row.iloc[COL_CALL_NO]   = call_no
         xl_row.iloc[COL_ITEM_TYPE] = final_itype
+        # Write processed (synonym-matched + inverted) values back to 700$a cols
+        for col_idx in COL_ADDED_AUTHORS:
+            raw_val = clean_text(row.iloc[col_idx])
+            if raw_val:
+                matched, _ = match_author_synonym(raw_val, state.get("synonyms_author", {}))
+                std, _     = invert_author_name(matched)
+                xl_row.iloc[col_idx] = std
         xl_row['Modification_Log'] = "; ".join(row_logs) if row_logs else "No changes"
         xl_row['Source_Row']       = index + 2
         clean_xlsx_rows.append(xl_row)
