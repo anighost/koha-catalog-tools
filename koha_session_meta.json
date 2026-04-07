@@ -1,0 +1,29 @@
+{
+    "last_primary_barcode": 102014,
+    "synonyms_publisher": {
+        "Ananda Publishers": ["ananda", "anondo"],
+        "Mitra & Ghosh Publishers Pvt. Ltd.": ["mitra", "ghosh"],
+        "Dey's Publishing": ["dey"],
+        "Sahitya Sansad": ["sansad", "samsad", "sahitya sansad"],
+        "Visva-Bharati": ["visva", "viswa", "vishwa", "vishwabharati", "biswa bharati"],
+        "M.C. Sarkar & Sons Pvt. Ltd.": ["sarkar", "sons"]
+    },
+    "synonyms_author": {
+        "Rabindranath Tagore": ["rabindranath tagore", "rabindranath thakur", "rabindra nath"],
+        "Ashapurna Devi": ["ashapurna devi", "ashapurna debi", "ashapura"],
+        "Jibanananda Das": ["jibanananda das", "jibanananda dash"],
+        "Bibhutibhushan Bandyopadhyay": ["bibhuti", "bandyopadhyay", "bandopadhyay", "bibhubhusan"],
+        "Sunil Gangopadhyay": ["sunil ganguly", "sunil gangopadhyaya", "sunil ganguli"],
+        "Sarat Chandra Chattopadhyay": ["sarat chandra", "sharatchandra", "chattopadhay"],
+        "Banaful": ["banaful", "bonophool", "bonoful", "balaichand"],
+        "Abanindranath Tagore": ["abanindranath tagore", "abanindranath thakur"]
+    },
+    "synonyms_keywords": {
+        "Galpa": "golpo", "Samagra": "somogro", "Rachanabali": "rochonaboli|rachonabali",
+        "Pratham": "prothom", "Tanaya": "tonoya", "Ajanta": "ojonta", "Satabarsha": "shotoborsho",
+        "Subarnalata": "shubarnalata", "Sera": "shera", "Sonar": "shonar", "Satyajit": "shatyajit",
+        "Biswas": "bishwas", "Teen": "tin", "Teeney": "tiney", "Ekey": "akey",
+        "Kailashe": "koilashey|kailashey", "Pratisruti": "protishruti|protisruti",
+        "Ghanada": "ghonada", "Jnan Gamyi": "jnangomyi|jnangamyi", "Double": "dubol"
+    }
+}

@@ -1,0 +1,9 @@
+# Ignore data files
+*.csv
+*.xlsx
+*.mrc
+*.mrk
+
+# Python cache
+__pycache__/
+.ipynb_checkpoints/
