@@ -1,29 +1,113 @@
 {
-    "last_primary_barcode": 102014,
+    "last_primary_barcode": 100000,
     "synonyms_publisher": {
-        "Ananda Publishers": ["ananda", "anondo"],
-        "Mitra & Ghosh Publishers Pvt. Ltd.": ["mitra", "ghosh"],
-        "Dey's Publishing": ["dey"],
-        "Sahitya Sansad": ["sansad", "samsad", "sahitya sansad"],
-        "Visva-Bharati": ["visva", "viswa", "vishwa", "vishwabharati", "biswa bharati"],
-        "M.C. Sarkar & Sons Pvt. Ltd.": ["sarkar", "sons"]
+        "Ananda Publishers": [
+            "ananda",
+            "anondo"
+        ],
+        "Mitra & Ghosh Publishers Pvt. Ltd.": [
+            "mitra & ghosh",
+            "mitra and ghosh",
+            "mitra ghosh"
+        ],
+        "Dey's Publishing": [
+            "dey's publishing",
+            "deys publishing"
+        ],
+        "Sahitya Sansad": [
+            "sansad",
+            "samsad",
+            "sahitya sansad"
+        ],
+        "Visva-Bharati": [
+            "visva",
+            "viswa",
+            "vishwa",
+            "vishwabharati",
+            "biswa bharati"
+        ],
+        "M.C. Sarkar & Sons Pvt. Ltd.": [
+            "m.c. sarkar",
+            "mc sarkar",
+            "sarkar & sons",
+            "sarkar and sons"
+        ]
     },
     "synonyms_author": {
-        "Rabindranath Tagore": ["rabindranath tagore", "rabindranath thakur", "rabindra nath"],
-        "Ashapurna Devi": ["ashapurna devi", "ashapurna debi", "ashapura"],
-        "Jibanananda Das": ["jibanananda das", "jibanananda dash"],
-        "Bibhutibhushan Bandyopadhyay": ["bibhuti", "bandyopadhyay", "bandopadhyay", "bibhubhusan"],
-        "Sunil Gangopadhyay": ["sunil ganguly", "sunil gangopadhyaya", "sunil ganguli"],
-        "Sarat Chandra Chattopadhyay": ["sarat chandra", "sharatchandra", "chattopadhay"],
-        "Banaful": ["banaful", "bonophool", "bonoful", "balaichand"],
-        "Abanindranath Tagore": ["abanindranath tagore", "abanindranath thakur"]
+        "Rabindranath Tagore": [
+            "rabindranath tagore",
+            "rabindranath thakur",
+            "rabindra nath"
+        ],
+        "Ashapurna Devi": [
+            "ashapurna devi",
+            "ashapurna debi",
+            "ashapura"
+        ],
+        "Jibanananda Das": [
+            "jibanananda das",
+            "jibanananda dash"
+        ],
+        "Bibhutibhushan Bandyopadhyay": [
+            "bibhutibhushan bandyopadhyay",
+            "bibhutibhusan bandopadhyay",
+            "bibhutibhushan bandopadhyay",
+            "bibhubhusan bandyopadhyay",
+            "bibhubhusan bandopadhyay"
+        ],
+        "Sunil Gangopadhyay": [
+            "sunil ganguly",
+            "sunil gangopadhyaya",
+            "sunil ganguli"
+        ],
+        "Sarat Chandra Chattopadhyay": [
+            "sarat chandra",
+            "sharatchandra",
+            "chattopadhay"
+        ],
+        "Banaful": [
+            "banaful",
+            "bonophool",
+            "bonoful",
+            "balaichand"
+        ],
+        "Abanindranath Tagore": [
+            "abanindranath tagore",
+            "abanindranath thakur"
+        ]
     },
     "synonyms_keywords": {
-        "Galpa": "golpo", "Samagra": "somogro", "Rachanabali": "rochonaboli|rachonabali",
-        "Pratham": "prothom", "Tanaya": "tonoya", "Ajanta": "ojonta", "Satabarsha": "shotoborsho",
-        "Subarnalata": "shubarnalata", "Sera": "shera", "Sonar": "shonar", "Satyajit": "shatyajit",
-        "Biswas": "bishwas", "Teen": "tin", "Teeney": "tiney", "Ekey": "akey",
-        "Kailashe": "koilashey|kailashey", "Pratisruti": "protishruti|protisruti",
-        "Ghanada": "ghonada", "Jnan Gamyi": "jnangomyi|jnangamyi", "Double": "dubol"
-    }
+        "Galpa": "golpo",
+        "Samagra": "somogro",
+        "Rachanabali": "rochonaboli|rachonabali",
+        "Pratham": "prothom",
+        "Tanaya": "tonoya",
+        "Ajanta": "ojonta",
+        "Satabarsha": "shotoborsho",
+        "Subarnalata": "shubarnalata",
+        "Sera": "shera",
+        "Sonar": "shonar",
+        "Satyajit": "shatyajit",
+        "Biswas": "bishwas",
+        "Teen": "tin",
+        "Teeney": "tiney",
+        "Ekey": "akey",
+        "Kailashe": "koilashey|kailashey",
+        "Pratisruti": "protishruti|protisruti",
+        "Ghanada": "ghonada",
+        "Jnan Gamyi": "jnangomyi|jnangamyi",
+        "Double": "dubol"
+    },
+	"series_overrides": {
+		"Subarnalata|Ashapurna Devi": "Satyabati Trilogy",
+		"Prothom Protisruti|Ashapurna Devi": "Satyabati Trilogy",
+		"Bokul Kotha|Ashapurna Devi": "Satyabati Trilogy",
+		"Bokul Katha|Ashapurna Devi": "Satyabati Trilogy",
+		"Sonar Kella|Satyajit Ray": "Feluda Series",
+		"Baksha Rahasya|Satyajit Ray": "Feluda Series"
+	},
+	"synonyms_place": {
+		"Kolkata": ["kolakata", "kolklata", "kolkota", "kolkata"],
+		"Dhaka, Bangladesh": ["dhaka, banagladesh", "dhaka, bangladsh"]
+	}
 }
