@@ -6,15 +6,26 @@ A Python script that cleans and converts a raw library catalog spreadsheet into 
 
 Takes a CSV (or XLSX) of catalog records and produces:
 
-- **`cleaned_<name>_<timestamp>.mrc`** — MARC21 binary file, ready for Koha batch import
-- **`cleaned_<name>_<timestamp>.xlsx`** — Audit spreadsheet showing every transformation applied per row
-- **`error_<name>_<timestamp>.xlsx`** — Rejected rows (missing mandatory title or author)
+- **`output/cleaned_<name>_<timestamp>.mrc`** — MARC21 binary file, ready for Koha batch import
+- **`output/cleaned_<name>_<timestamp>.xlsx`** — Audit spreadsheet showing every transformation applied per row
+- **`output/error_<name>_<timestamp>.xlsx`** — Rejected rows (missing mandatory title or author)
+
+All output files are written to an `output/` subdirectory (created automatically). Each run produces timestamped filenames so previous outputs are never overwritten.
+
+---
+
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `clean_catalog.py` | Main script — no external API needed |
+| `clean_catalog_llm.py` | Extended version — uses Claude API to generate additional phonetic variant titles (MARC 246) and subject headings (MARC 650) for better search coverage |
 
 ---
 
 ## Requirements
 
-Python 3.x with `pandas` installed. The script auto-installs `pymarc` and `openpyxl` on first run.
+Python 3.x with `pandas` installed. All other dependencies (`pymarc`, `openpyxl`, `rapidfuzz`) are auto-installed on first run.
 
 ```bash
 pip install pandas
@@ -26,13 +37,13 @@ pip install pandas
 
 ### 1. Set the input file path
 
-Open `clean_catalog.py` and update `INPUT_FILE` near the top to the full path of your CSV:
+Open the script and update `INPUT_FILE` near the top to the full path of your CSV:
 
 ```python
 INPUT_FILE = '/path/to/your/catalog_to_be_cleaned_v1.csv'
 ```
 
-The script accepts `.csv` or `.xlsx`. UTF-8 and Latin-1 encodings are both handled automatically.
+The script accepts `.csv` or `.xlsx`. UTF-8 and Latin-1 encodings are both handled automatically (a warning is printed if Latin-1 fallback is used).
 
 ### 2. Ensure `koha_session_meta.json` is present
 
@@ -49,20 +60,30 @@ cd /path/to/koha-catalog-tools
 python clean_catalog.py
 ```
 
-Output files are written to the **current working directory** (wherever you run the script from). Each run produces timestamped filenames so previous outputs are never overwritten.
-
 **Console output:**
 ```
   Processing row 150/2124...
 Writing outputs...
-  42 rejected rows → error_catalog_v1_20260407_1430.xlsx
+  42 rejected rows → output/error_catalog_v1_20260407_1430.xlsx
 
 FINISHED!
   Records processed : 2081
-  MARC file         : cleaned_catalog_v1_20260407_1430.mrc
-  Audit Excel       : cleaned_catalog_v1_20260407_1430.xlsx
+  MARC file         : output/cleaned_catalog_v1_20260407_1430.mrc
+  Audit Excel       : output/cleaned_catalog_v1_20260407_1430.xlsx
   Last barcode used : 102081
+  Error file        : output/error_catalog_v1_20260407_1430.xlsx
 ```
+
+### Using the LLM version
+
+Set your Anthropic API key, then run the LLM script instead:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+python clean_catalog_llm.py
+```
+
+On first run it enriches all unique titles via Claude API (batches of 20), caches results in `koha_session_meta.json` under `llm_cache`, and adds extra MARC 246 and 650 fields. Subsequent runs skip already-cached titles — no repeat API calls. Without the API key set, the script behaves identically to `clean_catalog.py`.
 
 ---
 
@@ -106,35 +127,40 @@ The script expects columns in a fixed position order (0-indexed). The expected h
 
 | Field | What the script does |
 |-------|---------------------|
-| **Author (100$a)** | Synonym-matched against dictionary, then inverted to `Surname, Forename`. Multiple authors joined by `and`/`&` are split — first goes to `100$a`, rest to `700$a`. Trailing `et al.` is stripped before inversion. |
-| **Added authors (700$a)** | Cols 19–24 and any co-authors split from the main author field — all synonym-matched and inverted. |
+| **Author (100$a)** | Synonym-matched against dictionary, then inverted to `Surname, Forename`. Multiple authors joined by `and`/`&` are split — first goes to `100$a`, rest to `700$a`. Trailing `et al.` is stripped before inversion. Fuzzy matching via `rapidfuzz` catches single-character typos. |
+| **Added authors (700$a)** | Cols 19–24 and any co-authors split from the main author field — all synonym-matched, inverted, and deduplicated. |
 | **ISBN** | Stripped of noise, converted ISBN-10 → ISBN-13. Invalid check digits are flagged in the audit log but still converted. |
-| **Publisher (260$b)** | Matched against synonym dictionary → canonical name. |
+| **Publisher (260$b)** | Matched against synonym dictionary using word-boundary regex → canonical name. |
 | **Place (260$a)** | Matched against place synonym dictionary → corrects misspellings (e.g. `Kolkota` → `Kolkata`). |
-| **Title keywords** | Bengali romanization variants normalized via keyword dictionary (e.g. `golpo` → `Galpa`). |
-| **Variant titles (246$a)** | Written as MARC 246 fields; comma-separated values each become a separate field. |
+| **Title keywords** | Bengali romanization variants normalized via keyword dictionary using word-boundary regex (e.g. `golpo` → `Galpa`). |
+| **Phonetic variants (246$a)** | Auto-generated by reverse-mapping canonical keywords back to colloquial forms (e.g. `Galpa Samagra` → `Golpo Somogro`). Also written for any explicit comma-separated values in col 5. Deduplicated against existing 246 fields. |
+| **Subject headings (650$a)** | Normalized via synonym dictionary (word-boundary match). Deduplicated across all 5 subject columns. Unrecognized language codes are flagged in the audit log. |
 | **Dates** | Multiple formats parsed and normalized to `YYYY-MM-DD`; defaults to today if missing. |
 | **Pages** | Normalized to `123 p.` format. |
 | **Year** | Non-numeric or out-of-range values discarded. |
 | **Call number** | Defaults to `891` (Bengali literature) if blank. |
 | **Item type** | Forced to `ASB` (Author Signed Book) if `500$a` or `952$z` contains `"author signed"`. |
-| **Language** | ISO 639-1 codes (`BN`, `EN`, `HN`) and full names (`Bengali`, `English`, `Hindi`) both accepted → mapped to MARC 3-letter codes. Defaults to `ben`. |
+| **Language** | ISO 639-1 codes (`BN`, `EN`, `HN`) and full names (`Bengali`, `English`, `Hindi`) both accepted → mapped to MARC 3-letter codes. Defaults to `ben`; a warning is logged in the audit if an unrecognized value is found. |
 | **Barcodes** | Generated sequentially from `10xxxxx` if missing. Copy barcodes derived by replacing the first two digits: copy 2 → `11xxxxx`, copy 3 → `12xxxxx`, copy 4 → `13xxxxx`. |
 
 ---
 
 ## Persistent State (`koha_session_meta.json`)
 
-This file lives next to the script and is the only file modified on each run (only `last_primary_barcode` is updated — all synonym dictionaries are never overwritten by a run).
+This file lives next to the script and is updated on each run. Synonym dictionaries are **never overwritten** by a run — only `last_primary_barcode` (and `llm_cache` in the LLM version) are updated.
 
 | Key | Purpose |
 |-----|---------|
 | `last_primary_barcode` | Highest `10xxxxx` barcode used; auto-increments for rows with no barcode |
-| `synonyms_publisher` | Variant publisher names → canonical form (substring match) |
+| `previous_last_primary_barcode` | Barcode value from before the last run — lets you revert accidental runs by copying this back to `last_primary_barcode` |
+| `synonyms_publisher` | Variant publisher names → canonical form (word-boundary regex match) |
 | `synonyms_author` | Variant/misspelled author names → canonical form. Use pre-inverted canonical (with comma) for compound surnames to prevent wrong inversion |
-| `synonyms_keywords` | Bengali romanization variants → standard spelling (regex word-boundary match on titles) |
+| `synonyms_keywords` | Bengali romanization variants → standard spelling (regex word-boundary match applied to titles, subtitles, and series) |
 | `synonyms_place` | Place misspellings → canonical city name |
+| `synonyms_subject` | Subject heading variants → canonical heading (word-boundary regex match) |
 | `series_overrides` | `"SeriesTitle\|AuthorName"` → canonical series name |
+| `fuzzy_author_threshold` | Minimum RapidFuzz score (0–100) for fuzzy author matching; default `88` |
+| `llm_cache` | *(LLM version only)* Cached Claude API results per title — phonetic variants and suggested subjects |
 
 ### Adding a compound surname
 
@@ -157,6 +183,10 @@ Use the already-inverted form as the key so inversion is skipped:
 }
 ```
 
-### Resetting barcodes for a fresh run
+### Reverting an accidental run
 
-Set `last_primary_barcode` to `100000` in the JSON before running.
+If the script was run by mistake and you want to restore the previous barcode counter:
+
+1. Open `koha_session_meta.json`
+2. Copy the value of `previous_last_primary_barcode` into `last_primary_barcode`
+3. Save the file
