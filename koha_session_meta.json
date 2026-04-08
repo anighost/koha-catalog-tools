@@ -53,7 +53,9 @@
             "bibhutibhusan bandopadhyay",
             "bibhutibhushan bandopadhyay",
             "bibhubhusan bandyopadhyay",
-            "bibhubhusan bandopadhyay"
+            "bibhubhusan bandopadhyay",
+            "vibhutibhushan bandyopadhyay",
+            "bivhutibhushan bandopadhyay"
         ],
         "Sunil Gangopadhyay": [
             "sunil ganguly",
@@ -61,15 +63,17 @@
             "sunil ganguli"
         ],
         "Sarat Chandra Chattopadhyay": [
+            "sarat chandra chattopadhyay",
             "sarat chandra",
             "sharatchandra",
-            "chattopadhay"
+            "sharat chandra",
+            "sharoto chandra"
         ],
         "Banaful": [
             "banaful",
             "bonophool",
             "bonoful",
-            "balaichand"
+            "balaichand mukhopadhyay"
         ],
         "Abanindranath Tagore": [
             "abanindranath tagore",
@@ -127,6 +131,9 @@
         "Chowdhurani, Renuka Devi": [
             "renuka debi chowdhurani",
             "renuka devi chowdhurani"
+        ],
+        "Kiriti": [
+            "kiritto"
         ]
     },
     "synonyms_keywords": {
@@ -149,7 +156,23 @@
         "Pratisruti": "protishruti|protisruti",
         "Ghanada": "ghonada",
         "Jnan Gamyi": "jnangomyi|jnangamyi",
-        "Double": "dubol"
+        "Double": "dubol",
+        "Sangraha": "sangrah|sangrahoa",
+        "Sahitya": "sohitya|sahitto",
+        "Rachana": "rochona|rochonar",
+        "Katha": "kotha|kothoa",
+        "Kobita": "kabita|kavita|kobito",
+        "Itihas": "itihash|itihos",
+        "Granthabali": "granthaboli|granthoboli",
+        "Kahini": "kahani|kohini",
+        "Smriti": "smroti|smoroti|smritti",
+        "Ekanka": "ekonko",
+        "Sharat": "sarat|sharoto",
+        "Bibhuti": "vibhuti|bivhuti",
+        "Bharat": "bharot",
+        "Bangla": "bengla|banglo",
+        "Kiriti": "kirti|kiritto",
+        "Natya": "notya"
     },
     "series_overrides": {
         "Subarnalata|Ashapurna Devi": "Satyabati Trilogy",
@@ -170,5 +193,61 @@
             "dhaka, banagladesh",
             "dhaka, bangladsh"
         ]
-    }
+    },
+    "synonyms_subject": {
+        "Fiction": [
+            "golpo",
+            "galpa",
+            "fiction",
+            "upanyas",
+            "novel"
+        ],
+        "Poetry": [
+            "kobita",
+            "kavita",
+            "poem",
+            "poetry",
+            "kavitaguchha"
+        ],
+        "Biography": [
+            "biography",
+            "jiboni",
+            "jeebon",
+            "jiban",
+            "jibancharit"
+        ],
+        "Non-Fiction": [
+            "nonfiction",
+            "non fiction",
+            "non-fiction",
+            "prabandha",
+            "probondho"
+        ],
+        "Children": [
+            "children",
+            "sishu",
+            "shishu",
+            "kids",
+            "balsahitya"
+        ],
+        "Drama": [
+            "drama",
+            "natak",
+            "natok"
+        ],
+        "Travel": [
+            "travel",
+            "bhraman",
+            "bhromon"
+        ],
+        "Essays": [
+            "essay",
+            "essays",
+            "rachana",
+            "rochona",
+            "prabandha"
+        ]
+    },
+    "fuzzy_author_threshold": 88,
+    "previous_last_primary_barcode": 100000
 }

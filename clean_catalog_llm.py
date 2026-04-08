@@ -16,6 +16,12 @@ def install_requirements():
         print("Installing rapidfuzz for fuzzy author matching...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "rapidfuzz"])
         print("Installation complete.\n")
+    try:
+        import anthropic  # noqa: F401
+    except ImportError:
+        print("Installing anthropic SDK for LLM enrichment...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic"])
+        print("Installation complete.\n")
 
 install_requirements()
 from pymarc import Record, Field, Subfield, MARCWriter
@@ -43,6 +49,10 @@ COL_VARIANT_TITLE = 5
 COL_BARCODE    = 35; COL_NOTE      = 13; COL_ITEM_NOTE = 36
 COL_ADDED_AUTHORS = [19, 20, 21, 22, 23, 24]
 COL_COPY2      = 37; COL_COPY3     = 38; COL_COPY4     = 39
+
+# LLM configuration
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+LLM_BATCH_SIZE = 20  # titles per Claude API call
 
 # Language code map — full names and ISO 639-1 two-letter codes → MARC three-letter codes
 LANG_MAP = {
@@ -252,6 +262,61 @@ def generate_phonetic_variants(title, synonyms_keywords):
             changed = True
     return [variant] if changed else []
 
+def batch_enrich_via_llm(title_author_pairs, api_key):
+    """
+    Call Claude to generate phonetic romanization variants and subject suggestions.
+    title_author_pairs: list of (title_std, author_std) tuples
+    Returns: dict keyed by title_std → {"variants": [...], "subjects": [...]}
+    """
+    import anthropic
+    import json as _json
+
+    items = "\n".join(
+        f'{i+1}. Title: "{t}" | Author: "{a}"'
+        for i, (t, a) in enumerate(title_author_pairs)
+    )
+    prompt = f"""You are helping a Bengali library index books for search.
+All titles are Bengali books romanized in English. Bengali romanization varies widely
+(e.g., the vowel 'অ' can be written 'a' or 'o'; 'শ' can be 'sh' or 's'; endings like '-a' often become '-o').
+
+For each book, provide:
+1. "variants": 3-5 alternative romanizations a Bengali reader might type when searching
+   (focus on the most common spelling variations, not transliterations)
+2. "subjects": 2-3 English subject headings describing genre, form, or theme
+
+Books:
+{items}
+
+Respond ONLY with a JSON array, one object per book, in the same order:
+[
+  {{"title": "...", "variants": ["...", "..."], "subjects": ["...", "..."]}},
+  ...
+]"""
+
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    raw = message.content[0].text.strip()
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+    results = _json.loads(raw)
+
+    cache = {}
+    for i, item in enumerate(results):
+        if i >= len(title_author_pairs):
+            break
+        title_key = title_author_pairs[i][0]
+        cache[title_key] = {
+            "variants": [v.strip() for v in item.get("variants", []) if v.strip()],
+            "subjects": [s.strip() for s in item.get("subjects", []) if s.strip()],
+        }
+    return cache
+
 def load_session_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r', encoding='utf-8') as f:
@@ -264,12 +329,14 @@ def load_session_state():
         "synonyms_keywords": {},
         "synonyms_place": {},
         "synonyms_subject": {},
-        "fuzzy_author_threshold": 88
+        "fuzzy_author_threshold": 88,
+        "llm_cache": {}
     }
 
 def save_session_state(state_dict):
     # Read the current file first so synonym dicts are never overwritten by a stale in-memory state.
     # Saves previous barcode as a backup before updating, so accidental runs can be reverted.
+    # Also persists llm_cache when present.
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, 'r', encoding='utf-8') as f:
             on_disk = json.load(f)
@@ -277,6 +344,8 @@ def save_session_state(state_dict):
         on_disk = {}
     on_disk["previous_last_primary_barcode"] = on_disk.get("last_primary_barcode", state_dict["last_primary_barcode"])
     on_disk["last_primary_barcode"] = state_dict["last_primary_barcode"]
+    if "llm_cache" in state_dict:
+        on_disk["llm_cache"] = state_dict["llm_cache"]
     with open(STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(on_disk, f, indent=4, ensure_ascii=False)
 
@@ -308,6 +377,43 @@ for val in df.iloc[:, COL_BARCODE]:
     s_val = str(val).strip()
     if is_primary_barcode(s_val):
         last_primary_bc = max(last_primary_bc, int(s_val))
+
+# ── LLM ENRICHMENT (optional, requires ANTHROPIC_API_KEY) ─────────────────────
+llm_cache = state.get("llm_cache", {})
+if ANTHROPIC_API_KEY:
+    # Pre-pass: collect unique (title_std, author) pairs not yet in the cache
+    to_enrich = []
+    seen_enrich = set()
+    for _, row in df.iterrows():
+        t_raw = clean_text(row.iloc[COL_TITLE])
+        a_raw = clean_text(row.iloc[COL_AUTHOR])
+        if not t_raw or not a_raw:
+            continue
+        # Apply keyword normalization so cache key matches what the main loop uses
+        t_std, _ = apply_keyword_normalization(t_raw, state.get("synonyms_keywords", {}))
+        if t_std and t_std not in llm_cache and t_std not in seen_enrich:
+            to_enrich.append((t_std, a_raw))
+            seen_enrich.add(t_std)
+
+    if to_enrich:
+        print(f"  Enriching {len(to_enrich)} titles via Claude API...")
+        for i in range(0, len(to_enrich), LLM_BATCH_SIZE):
+            batch = to_enrich[i:i + LLM_BATCH_SIZE]
+            try:
+                new_entries = batch_enrich_via_llm(batch, ANTHROPIC_API_KEY)
+                llm_cache.update(new_entries)
+                print(f"    Batch {i // LLM_BATCH_SIZE + 1}: enriched {len(new_entries)} titles")
+            except Exception as e:
+                print(f"    WARNING: LLM enrichment batch failed: {e}")
+        state["llm_cache"] = llm_cache
+        save_session_state(state)  # persist cache before main loop so it's not lost on crash
+    else:
+        print(f"  LLM cache up to date ({len(llm_cache)} titles already enriched).")
+else:
+    if not llm_cache:
+        print("  (No ANTHROPIC_API_KEY set — skipping LLM enrichment. Set env var to enable.)")
+    else:
+        print(f"  (Using cached LLM enrichment for {len(llm_cache)} titles — no API key set.)")
 
 clean_xlsx_rows, error_rows, marc_recs = [], [], []
 total_rows = len(df)
@@ -508,6 +614,18 @@ for row_num, (index, row) in enumerate(df.iterrows()):
         ))
         row_logs.append(f"Auto-generated phonetic 246$a: '{phonetic_variant}'")
 
+    # 246 — LLM-generated phonetic romanization variants
+    cached_entry = llm_cache.get(title_std, {})
+    existing_246 = {f['a'].casefold() for f in rec.get_fields('246') if f['a']}
+    for variant in cached_entry.get("variants", []):
+        if variant and variant.casefold() not in existing_246:
+            rec.add_field(Field(
+                tag='246', indicators=['1', ' '],
+                subfields=[Subfield(code='a', value=variant)]
+            ))
+            existing_246.add(variant.casefold())
+            row_logs.append(f"LLM phonetic variant 246$a: '{variant}'")
+
     # 250 — Edition
     if edition:
         rec.add_field(Field(
@@ -568,6 +686,16 @@ for row_num, (index, row) in enumerate(df.iterrows()):
             tag='650', indicators=[' ', '4'],
             subfields=[Subfield(code='a', value=subject)]
         ))
+
+    # 650 — LLM-suggested subject headings
+    for subj in cached_entry.get("subjects", []):
+        if subj and subj.casefold() not in seen_650:
+            seen_650.add(subj.casefold())
+            rec.add_field(Field(
+                tag='650', indicators=[' ', '4'],
+                subfields=[Subfield(code='a', value=subj)]
+            ))
+            row_logs.append(f"LLM-suggested subject: '{subj}'")
 
     # 700 — Added entries: co-authors split from 100$a field, then cols 19-24
     seen_700 = {author_std.casefold()}
@@ -711,3 +839,6 @@ print(f"  Audit Excel       : {OUTPUT_XLSX}")
 print(f"  Last barcode used : {last_primary_bc}")
 if error_rows:
     print(f"  Error file        : {ERROR_XLSX}")
+llm_cached_count = len(llm_cache)
+if llm_cached_count:
+    print(f"  LLM-enriched titles in cache: {llm_cached_count}")
