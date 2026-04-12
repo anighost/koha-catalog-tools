@@ -1,0 +1,1505 @@
+{
+  "batch": 3,
+  "images_folder": "/Users/anirbanghosh/Dishari/Library/Catalog/Catalog_AI/Image/WIP",
+  "processed_images": [
+    "265.jpeg",
+    "266.jpeg",
+    "267.jpeg",
+    "269.jpeg",
+    "284.jpeg",
+    "286.jpeg",
+    "287.jpeg",
+    "292.jpeg",
+    "293.jpeg",
+    "294.jpeg",
+    "295.jpeg",
+    "296.jpeg",
+    "297.jpeg",
+    "298.jpeg",
+    "299.jpeg",
+    "PXL_20220410_001311213.jpg",
+    "PXL_20220410_001321420.jpg",
+    "PXL_20220410_001333288.jpg",
+    "PXL_20220410_001345334.jpg",
+    "PXL_20220410_001400064.jpg",
+    "PXL_20220410_001410735.PORTRAIT.jpg",
+    "PXL_20220410_001432302.PORTRAIT.jpg",
+    "PXL_20220410_001444280.PORTRAIT.jpg",
+    "PXL_20220410_001501328.PORTRAIT.jpg",
+    "PXL_20220410_001507944.PORTRAIT.jpg",
+    "10ti_Uponyas.png",
+    "3.jpeg",
+    "302.jpeg",
+    "303.jpeg",
+    "304.jpeg",
+    "305.jpeg",
+    "306.jpeg",
+    "307.jpeg",
+    "309.jpeg",
+    "310.jpeg",
+    "311.jpeg",
+    "313.jpeg",
+    "314.jpeg",
+    "315.jpeg",
+    "316.jpeg",
+    "317.jpeg",
+    "318.jpeg",
+    "319.jpeg",
+    "320.jpeg",
+    "321.jpeg",
+    "322.jpeg",
+    "323.jpeg",
+    "324.jpeg",
+    "325.jpeg",
+    "326.jpeg",
+    "327.jpeg",
+    "328.jpeg",
+    "329.jpeg",
+    "330.jpeg",
+    "331.jpeg",
+    "332.jpeg",
+    "333.jpeg",
+    "335.jpeg",
+    "336.jpeg",
+    "337.jpeg",
+    "338.jpeg",
+    "339.jpeg",
+    "340.jpeg",
+    "341.jpeg",
+    "342.jpeg",
+    "343.jpeg",
+    "344.jpeg",
+    "347.jpeg",
+    "bt_roader_dhare.png",
+    "Chilekothar_Sepai.png",
+    "ghunpoka.png",
+    "Scan.jpeg",
+    "Scan 1.jpeg",
+    "Scan 2.jpeg",
+    "Scan 3.jpeg",
+    "118.jpeg",
+    "149.jpeg",
+    "150.jpeg",
+    "151.jpeg",
+    "152.jpeg",
+    "153.jpeg",
+    "154.jpeg",
+    "156.jpeg",
+    "158.jpeg",
+    "160.jpeg",
+    "161.jpeg",
+    "162.jpeg",
+    "163.jpeg",
+    "164.jpeg",
+    "165.jpeg",
+    "166.jpeg",
+    "167.jpeg",
+    "172.jpeg",
+    "221.jpeg",
+    "223.jpeg",
+    "224.jpeg",
+    "225.jpeg",
+    "226.jpeg",
+    "227.jpeg",
+    "229.jpeg",
+    "230.jpeg",
+    "231.jpeg",
+    "233.jpeg",
+    "235.jpeg",
+    "236.jpeg",
+    "237.jpeg",
+    "240.jpeg",
+    "252.jpeg",
+    "253.jpeg",
+    "254.jpeg",
+    "255.jpeg",
+    "256.jpeg",
+    "257.jpeg",
+    "258.jpeg",
+    "259.jpeg",
+    "260.jpeg",
+    "261.jpeg",
+    "262.jpeg",
+    "263.jpeg",
+    "345.jpeg",
+    "346.jpeg",
+    "348.jpeg",
+    "67.jpeg",
+    "PXL_20220410_001515671.PORTRAIT.jpg",
+    "PXL_20220410_001538369.PORTRAIT.jpg",
+    "PXL_20220410_001545685.PORTRAIT.jpg",
+    "PXL_20220410_001553956.PORTRAIT.jpg",
+    "PXL_20220410_001612486.PORTRAIT.jpg",
+    "PXL_20220410_001618819.PORTRAIT.jpg",
+    "PXL_20220410_001626577.PORTRAIT.jpg",
+    "PXL_20220410_005023748.PORTRAIT.jpg"
+  ],
+  "matched": [
+    {
+      "author": "Aurobindo, Sri",
+      "title": "Ved Rahasya - Part 2",
+      "image": "265.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Title \"বেদরহস্য উত্তরার্ধ\" (Uttarardha = latter half) maps to Part 2; author clear"
+    },
+    {
+      "author": "Mitra, Gajendra Kumar",
+      "title": "Panchajanya",
+      "image": "266.jpeg",
+      "confidence_pct": 65,
+      "confidence_level": "Medium",
+      "notes": "Title heavily stylized on cover; read as \"পঞ্চজন্য\" (Panchajanya); author clear"
+    },
+    {
+      "author": "Mitra, Gajendra Kumar",
+      "title": "Panchajanya - Part 2",
+      "image": "266.jpeg",
+      "confidence_pct": 40,
+      "confidence_level": "Low",
+      "notes": "Cannot determine Part 1 vs Part 2 from cover alone — REVIEW NEEDED"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 2",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 1",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 10",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 11",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 6",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Volume 7",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 12",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 5",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 4",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 3",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Bandyopadhyay, Sharadindu",
+      "title": "Sharadindu Omnibus - Vol 8",
+      "image": "267.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"শরদিন্দু অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Mitra, Bimal",
+      "title": "Begum Mary Biswas",
+      "image": "269.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Cover reads \"বেগম মেরী বিয়াস\"; catalog title \"Begum Mary Biswas\" is minor romanisation variant"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 1",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 2",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 3",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 4",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 5",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 6",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 7",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 8",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 9",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 10",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 11",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 12",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 13",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 14",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 15",
+      "image": "284.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কিরীটী অমনিবাস\"; same image assigned to all volumes per user instruction"
+    },
+    {
+      "author": "Devi, Ashapurna",
+      "title": "Ei To Sedin",
+      "image": "287.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"এই তো সেদিন\" and author \"আশাপূর্ণা দেবী\""
+    },
+    {
+      "author": "Ghosh, Binoy",
+      "title": "Vidyasagar O Bangali Samaj",
+      "image": "292.jpeg",
+      "confidence_pct": 72,
+      "confidence_level": "Medium",
+      "notes": "Author \"বিনয় ঘোষ\" clear; title partially obscured by stylized layout on cover"
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Kobita Samagra",
+      "image": "293.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"কবিতা সমগ্র\" and author \"সুনীল গঙ্গোপাধ্যায়\""
+    },
+    {
+      "author": "Chattopadhyay, Sanjib",
+      "title": "Lotakombol - Part 1",
+      "image": "296.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"লোটাকম্বল\" and author \"সঞ্জীব চট্টোপাধ্যায়\"; same image for both parts"
+    },
+    {
+      "author": "Chattopadhyay, Sanjib",
+      "title": "Lotakombol - Part 2",
+      "image": "296.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"লোটাকম্বল\" and author \"সঞ্জীব চট্টোপাধ্যায়\"; same image for both parts"
+    },
+    {
+      "author": "Sastri, Sibnath",
+      "title": "Ramtanu Lahiri O Tatkalin BangaSamaj",
+      "image": "297.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"রামতনু লাহিড়ী ও তৎকালীন বঙ্গসমাজ\" and author \"শিবনাথ শাস্ত্রী\""
+    },
+    {
+      "author": "Chakraborty, Sudhir",
+      "title": "Gabhir Nirjan Pathey",
+      "image": "298.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"গভীর নির্জন পথে\" and author \"সুধীর চক্রবর্তী\""
+    },
+    {
+      "author": "Bhaduri, Satinath",
+      "title": "Dhorai Charit Manas",
+      "image": "299.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"ঠোড়াই চরিত মানস\"; catalog title \"Dhorai\" vs cover \"Thorai\" — alternate romanisation of ঠ"
+    },
+    {
+      "author": "Singha, Ranajit",
+      "title": "Kolkatar Rastay Rastay",
+      "image": "PXL_20220410_001311213.jpg",
+      "confidence_pct": 75,
+      "confidence_level": "Medium",
+      "notes": "Author \"রণজিৎ সিংহ\" clear; title in stylized curved font, partially inferred"
+    },
+    {
+      "author": "Multiple",
+      "title": "Samakal",
+      "image": "PXL_20220410_001345334.jpg",
+      "confidence_pct": 68,
+      "confidence_level": "Medium",
+      "notes": "Edited by Sikandar Abu Jafar, dated 1971-72; main title inferred as \"সমকাল\" from context"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Aina Mahal",
+      "image": "PXL_20220410_001410735.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"আয়নামহল\" (Aynamahal = Aina Mahal) and author \"সুচিত্রা ভট্টাচার্য\""
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Saheli",
+      "image": "PXL_20220410_001432302.PORTRAIT.jpg",
+      "confidence_pct": 75,
+      "confidence_level": "Medium",
+      "notes": "Cover reads \"সোহেলি\" (Soheli); catalog has \"Saheli\" — romanisation variant; author clear"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Neel Ghurni",
+      "image": "PXL_20220410_001501328.PORTRAIT.jpg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"নীল ঘূর্ণি\" and author \"সুচিত্রা ভট্টাচার্য\""
+    },
+    {
+      "author": "Bhattarcharya, Suchitra",
+      "title": "Neel Ghurni",
+      "image": "PXL_20220410_001501328.PORTRAIT.jpg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Same as above; second catalog entry is a typo variant of the author name"
+    },
+    {
+      "author": "Jarasandha",
+      "title": "Louhokopat",
+      "image": "PXL_20220410_001507944.PORTRAIT.jpg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"লৌহকপাট\" and author \"জরাসন্ধ\""
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Dosh ti Upanyash",
+      "image": "10ti_Uponyas.png",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"দশটি উপন্যাস\"; author \"সুচিত্রা ভট্টাচার্য\" clear"
+    },
+    {
+      "author": "Roy, Annadashankar",
+      "title": "Hoi Re Babui Hoi",
+      "image": "3.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Cover reads \"হই রে বাবুই হই\" in old stylized typeface; author \"অন্নদাশঙ্কর রায়\" clear"
+    },
+    {
+      "author": "Sarkar, Jogindranath",
+      "title": "Hashi Khushi - Pat 1",
+      "image": "302.jpeg",
+      "confidence_pct": 88,
+      "confidence_level": "High",
+      "notes": "Cover reads \"হাসিখুসি প্রথম ভাগ\"; Yogindranath/Jogindranath = same person, romanisation variant"
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Andamaney Hati",
+      "image": "303.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"অন্দামানে হাতি\" and author \"সুনীল গঙ্গোপাধ্যায়\""
+    },
+    {
+      "author": "Goswami, Joy",
+      "title": "Hulora tool er pashey",
+      "image": "304.jpeg",
+      "confidence_pct": 88,
+      "confidence_level": "High",
+      "notes": "Cover reads \"হুলোরা টুলোর পাশে\"; author \"জয় গোস্বামী\" clear; title minor romanisation variant"
+    },
+    {
+      "author": "Multiple",
+      "title": "Sandesh",
+      "image": "305.jpeg",
+      "confidence_pct": 80,
+      "confidence_level": "High",
+      "notes": "Cover is Sandesh magazine (সন্দেশ) December 2009 issue, edited by Sandip Ray"
+    },
+    {
+      "author": "Ghosh, Sailen",
+      "title": "Mitul Naam e Putulti",
+      "image": "310.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"মিতুল নামে পুতুলটি\" and author \"শৈলেন ঘোষ\""
+    },
+    {
+      "author": "Basu, Sunirmal",
+      "title": "Chirokaler Sera",
+      "image": "311.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"চিরকালের সেরা\" and author \"সুনির্মল বসু\""
+    },
+    {
+      "author": "Roy Chowdhury, Upendra Kishore",
+      "title": "Chitre Chhotoder Mahabharat",
+      "image": "316.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"চিত্রে ছোটদের মহাভারত\" and author \"উপেন্দ্রকিশোর রায়চৌধুরী\""
+    },
+    {
+      "author": "Roy Chowdhury, Upendra Kishore",
+      "title": "Chitre Chhotoder Ramayan",
+      "image": "317.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"চিত্রে ছোটদের রামায়ণ\" and author \"উপেন্দ্রকিশোর রায়চৌধুরী\""
+    },
+    {
+      "author": "Shuvaprasanna",
+      "title": "Tumpar Ramdhonu",
+      "image": "319.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Cover reads \"টুপার রামধনু\"; catalog \"Tumpar Ramdhonu\" is minor romanisation variant; author \"শুভপ্রসন্ন\" clear"
+    },
+    {
+      "author": "Ray, Sabyasachi",
+      "title": "Panchatantra Galpa Samagra",
+      "image": "321.jpeg",
+      "confidence_pct": 78,
+      "confidence_level": "Medium",
+      "notes": "Cover reads \"পঞ্চতন্ত্র গল্পসমগ্র\"; author not visible on cover — matched by title to catalog"
+    },
+    {
+      "author": "Ghosh, Kalyani",
+      "title": "Lal Baksho, Interview O Anyanyo Kishore Galpa",
+      "image": "322.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"লাল বাক্সো, ইন্টারভিউ ও অন্যান্য কিশোর গল্প\"; author \"কল্যাণী ঘোষ\" clear"
+    },
+    {
+      "author": "Horvat, Joza",
+      "title": "Waotapu",
+      "image": "324.jpeg",
+      "confidence_pct": 80,
+      "confidence_level": "High",
+      "notes": "Cover reads \"ওয়াওতাপু\"; author shown as Ilona Horvath on cover vs Joza Horvat in catalog — likely same person, romanisation variant"
+    },
+    {
+      "author": "Lahiri, Shanu",
+      "title": "Hati O Gandar er Galpa",
+      "image": "325.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"হাতি ও গণ্ডারের গল্প\"; author \"শানু লাহিড়ী\" clear"
+    },
+    {
+      "author": "Thakur, Gaganendranath",
+      "title": "Bhodor Bahadur",
+      "image": "328.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"ভোদড় বাহাদুর\" and author \"গগনেন্দ্রনাথ ঠাকুর\""
+    },
+    {
+      "author": "Misc",
+      "title": "Matribhasha",
+      "image": "329.jpeg",
+      "confidence_pct": 72,
+      "confidence_level": "Medium",
+      "notes": "Cover reads \"মাতৃভাষা\" (linguistic human rights journal); author/editor not clearly visible"
+    },
+    {
+      "author": "Mukhopadhyay, Shekhar",
+      "title": "Rupkatha Noy Pokar Katha",
+      "image": "330.jpeg",
+      "confidence_pct": 72,
+      "confidence_level": "Medium",
+      "notes": "Cover reads \"রঙকথা নয় পোকার কথা\"; catalog has \"Rupkatha\" — \"রূপকথা\" vs \"রঙকথা\" may be font reading difference; author and WWF logo confirm"
+    },
+    {
+      "author": "Aaluwa, Hydrose",
+      "title": "Lej",
+      "image": "331.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"লেজ\"; author \"হাইড্রোস আলুয়া\" matches catalog \"Hydrose Aaluwa\""
+    },
+    {
+      "author": "Chattopadhyay, Sanjib",
+      "title": "Palash",
+      "image": "332.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"পলাশ\" and author \"সঞ্জীব চট্টোপাধ্যায়\""
+    },
+    {
+      "author": "Lahiri, Shanu",
+      "title": "Char Shilpi O Tader Chhobi",
+      "image": "335.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"চার শিল্পী ও তাঁদের ছবি\" and author \"শানু লাহিড়ী\""
+    },
+    {
+      "author": "Ray, Biswajit",
+      "title": "Fakibaj Bador",
+      "image": "336.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"ফাঁকিবাজ বাঁদর\"; author \"বিশ্বজিৎ রায়\" matches catalog \"Biswajit Ray\"; title phonetic variant"
+    },
+    {
+      "author": "Chakraborty, Dr. Biswanath",
+      "title": "Napit Theke Doctor",
+      "image": "337.jpeg",
+      "confidence_pct": 88,
+      "confidence_level": "High",
+      "notes": "Cover reads \"নাপিত থেকে ডাক্তার\"; series \"আবিষ্কারের গল্প\"; author \"ডাঃ বিশ্বনাথ চক্রবর্তী\" clear"
+    },
+    {
+      "author": "Basak, Balaram",
+      "title": "Bhaluk er Dolna",
+      "image": "339.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"ভালুকের দোলনা\" and author \"বলরাম বসাক\""
+    },
+    {
+      "author": "Mitra, Oindrila",
+      "title": "Ekti Gachh Ekla",
+      "image": "342.jpeg",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover reads \"একটি গাছ একলা\"; author \"ঐন্দ্রিলা মিত্র\" matches catalog \"Oindrila Mitra\""
+    },
+    {
+      "author": "Sarkar, Pabitra",
+      "title": "Pratham Boi",
+      "image": "343.jpeg",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"প্রথম বই\" and author \"পবিত্র সরকার\""
+    },
+    {
+      "author": "Basu, Samaresh",
+      "title": "BT Road er Dharey",
+      "image": "bt_roader_dhare.png",
+      "confidence_pct": 92,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"বি.টি. রোডের ধারে\" and author \"সমরেশ বসু\""
+    },
+    {
+      "author": "Elias, Akhtaruzzaman",
+      "title": "Chilekothar Sepai",
+      "image": "Chilekothar_Sepai.png",
+      "confidence_pct": 95,
+      "confidence_level": "High",
+      "notes": "Cover clearly reads \"চিলেকোঠার সেপাই\" and author \"আখতারুজ্জামান ইলিয়াস\""
+    },
+    {
+      "author": "Mukhopadhyay, Shirshendu",
+      "title": "Ghunpoka",
+      "image": "ghunpoka.png",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Cover reads \"ঘুণপোকা\"; author name in stylized script confirmed as Shirshendu Mukhopadhyay by catalog match"
+    },
+    {
+      "author": "Various",
+      "title": "Desh Subarnajayanti Galpo Sankalan",
+      "image": "118.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Back cover; সুবর্ণজয়ন্তী গল্প সংকলন"
+    },
+    {
+      "author": "Basu, Rajshekhar",
+      "title": "Parashuram Granthabali : Vol 1",
+      "image": "149.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Series expansion; canonical image"
+    },
+    {
+      "author": "Basu, Rajshekhar",
+      "title": "Parashuram Granthabali : Vol 2",
+      "image": "149.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Basu, Rajshekhar",
+      "title": "Parashuram Granthabali - Vol 3",
+      "image": "149.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Corbett, Jim",
+      "title": "Jim Corbett Omnibus : Vol 1",
+      "image": "153.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Corbett, Jim",
+      "title": "Jim Corbett Omnibus : Vol 2",
+      "image": "153.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Mitra, Bimal",
+      "title": "Kori Diye Kinlam : Vol 1",
+      "image": "156.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Mitra, Bimal",
+      "title": "Kori Diye Kinlam : Vol 2",
+      "image": "156.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Dey, Sailesh",
+      "title": "Ami Subhas Bolchhi : Combined Volumes",
+      "image": "158.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "আমি সুভাষ বলছি"
+    },
+    {
+      "author": "Bhattacharya, Nabarun",
+      "title": "Harbart",
+      "image": "160.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "হারবার্ট"
+    },
+    {
+      "author": "Bhattacharya, Nimai",
+      "title": "Memsaheb",
+      "image": "161.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "মেমসাহেব"
+    },
+    {
+      "author": "Mukhopadhyay, Prabhat Kumar",
+      "title": "Prabhat Kumar Mukhopadhyay er Shreshtho Galpa",
+      "image": "163.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": ""
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Galpa Samagra - Vol 2",
+      "image": "164.jpeg",
+      "confidence_pct": 75,
+      "confidence_level": "Medium",
+      "notes": "Vol not visible on cover"
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Galpa Samagra - Vol 3",
+      "image": "164.jpeg",
+      "confidence_pct": 75,
+      "confidence_level": "Medium",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Galpa Samagraha",
+      "image": "164.jpeg",
+      "confidence_pct": 75,
+      "confidence_level": "Medium",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Sanyal, Narayan",
+      "title": "Swargiya Naraker Dwar Ebong",
+      "image": "165.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "স্বর্গীয় নরকের দ্বার এবং..."
+    },
+    {
+      "author": "Banaful",
+      "title": "Banaful er Shreshtho Galpa",
+      "image": "166.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "বনফুলের শ্রেষ্ঠ গল্প"
+    },
+    {
+      "author": "Devi, Ashapurna",
+      "title": "Subarnalata",
+      "image": "167.jpeg",
+      "confidence_pct": 65,
+      "confidence_level": "Medium",
+      "notes": "Green cover, cursive gold vertical text; hard to read clearly"
+    },
+    {
+      "author": "Basu, Samaresh",
+      "title": "Swanirbachito Shrestho Galpa",
+      "image": "172.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "স্বনির্বাচিত শ্রেষ্ঠ গল্প"
+    },
+    {
+      "author": "Milan, Imdadul Haq",
+      "title": "Esechhile",
+      "image": "221.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "এসেছিলে"
+    },
+    {
+      "author": "Mitra, Bimal",
+      "title": "Shohor Chhariye",
+      "image": "223.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "শহর ছাড়িয়ে"
+    },
+    {
+      "author": "Iqbal, Muhammed Zafar",
+      "title": "Eeron",
+      "image": "224.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "ইরন (science fiction)"
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Sei Samay Vol1",
+      "image": "225.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Gangopadhyay, Sunil",
+      "title": "Sei Samay Vol2",
+      "image": "225.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Sera Dosh ti Upanyash",
+      "image": "227.jpeg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "সেরা দশটি উপন্যাস"
+    },
+    {
+      "author": "Bhattacharya, Gautam",
+      "title": "Pakistan e Bharat er Uday",
+      "image": "229.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "পাকিস্তানে ভারত উদয়"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Firey Dekha",
+      "image": "233.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "ফিরে দেখা"
+    },
+    {
+      "author": "Bhattacharya, Nabarun",
+      "title": "Upanyas Samagra",
+      "image": "235.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "উপন্যাস সমগ্র"
+    },
+    {
+      "author": "Shankar",
+      "title": "Mathar Upor Chhad",
+      "image": "236.jpeg",
+      "confidence_pct": 70,
+      "confidence_level": "Medium",
+      "notes": "Author not on front; identified from title match"
+    },
+    {
+      "author": "Roy, Tarapada",
+      "title": "Jalanjali",
+      "image": "237.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "জলাঞ্জলি"
+    },
+    {
+      "author": "Multiple",
+      "title": "Samakal",
+      "image": "252.jpeg",
+      "confidence_pct": 50,
+      "confidence_level": "Low",
+      "notes": "Rotated image; REVIEW NEEDED"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Achhi",
+      "image": "256.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "আছি..."
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Neel Ghurni",
+      "image": "257.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "নীল ঘূর্ণি"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Saheli",
+      "image": "258.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "সহেলি"
+    },
+    {
+      "author": "Bhattacharya, Suchitra",
+      "title": "Aina Mahal",
+      "image": "259.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "আয়নামহল"
+    },
+    {
+      "author": "Sripantha",
+      "title": "Thogi",
+      "image": "260.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "ঠগী"
+    },
+    {
+      "author": "Dutta, Madhusudan",
+      "title": "Madhusudan Rachanabali",
+      "image": "261.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "মধুসূদন রচনাবলী"
+    },
+    {
+      "author": "Jarasandha",
+      "title": "Louhokopat",
+      "image": "263.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "লৌহকপাট"
+    },
+    {
+      "author": "Ray, Sukumar",
+      "title": "Khai Khai",
+      "image": "345.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "খাই খাই"
+    },
+    {
+      "author": "Mitra Majumdar, Dakhinaranjan",
+      "title": "Kishor Granthabali",
+      "image": "348.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "কিশোর গ্রন্থাবলী"
+    },
+    {
+      "author": "Chattopadhyay, Sanjib",
+      "title": "Lotakombol - Part 1",
+      "image": "67.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Chattopadhyay, Sanjib",
+      "title": "Lotakombol - Part 2",
+      "image": "67.jpeg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Mitra, Gajendra Kumar",
+      "title": "Panchajanya",
+      "image": "PXL_20220410_001515671.PORTRAIT.jpg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "পাংচজন্য; series expansion"
+    },
+    {
+      "author": "Mitra, Gajendra Kumar",
+      "title": "Panchajanya - Part 2",
+      "image": "PXL_20220410_001515671.PORTRAIT.jpg",
+      "confidence_pct": 85,
+      "confidence_level": "High",
+      "notes": "Series expansion"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 1",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 2",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 3",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 4",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 5",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 6",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 7",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 8",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 9",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 10",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 11",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 12",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 13",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 14",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    },
+    {
+      "author": "Gupta, Nihar Ranjan",
+      "title": "Kiriti Omnibus - Vol 15",
+      "image": "PXL_20220410_005023748.PORTRAIT.jpg",
+      "confidence_pct": 90,
+      "confidence_level": "High",
+      "notes": "Series expansion — all 15 Kiriti Omnibus vols"
+    }
+  ],
+  "unmatched": [
+    {
+      "image": "294.jpeg",
+      "extracted_title": "Recorder Poshak (রেকর্ডের পোশাক)",
+      "extracted_author": "Rumjhim Sengupta",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "No catalog entry found — REVIEW NEEDED"
+    },
+    {
+      "image": "295.jpeg",
+      "extracted_title": "Unclear — starts with \"অমর...\" ",
+      "extracted_author": "Pradip Datta",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Author not in catalog; title unreadable from stylized cover — REVIEW NEEDED"
+    },
+    {
+      "image": "PXL_20220410_001444280.PORTRAIT.jpg",
+      "extracted_title": "UNIDENTIFIED",
+      "extracted_author": "UNIDENTIFIED",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Only back cover visible; no title or author readable — REVIEW NEEDED"
+    },
+    {
+      "image": "306.jpeg",
+      "extracted_title": "Unclear — stylized red text, horseman painting",
+      "extracted_author": "Unknown",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Text illegible; only a painting visible — REVIEW NEEDED"
+    },
+    {
+      "image": "307.jpeg",
+      "extracted_title": "Molla Nasiruddin er Sera 100 Galpo (মোল্লা নাসিরুদ্দিনের সেরা ১০০ গল্প)",
+      "extracted_author": "Unknown",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "309.jpeg",
+      "extracted_title": "Gopal Bhar er Sera 100 Galpo (গোপাল ভাঁড়ের সেরা ১০০ গল্প)",
+      "extracted_author": "Unknown",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "313.jpeg",
+      "extracted_title": "Sera Hasir Galpo (সেরা হাসির গল্প)",
+      "extracted_author": "Majumdar, Leela (editor)",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Catalog has other Leela Majumdar titles but not this anthology — REVIEW NEEDED"
+    },
+    {
+      "image": "314.jpeg",
+      "extracted_title": "Pontur Chithi (পোন্টুর চিঠি)",
+      "extracted_author": "Mukhopadhyay, Bibhuti Bhushan",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "315.jpeg",
+      "extracted_title": "Unclear — \"Word Book 32\" visible, mixed Bengali/English",
+      "extracted_author": "Unknown",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Cannot identify from cover — REVIEW NEEDED"
+    },
+    {
+      "image": "318.jpeg",
+      "extracted_title": "Shobcheye Sera Gachh (সবচেয়ে সেরা গাছ)",
+      "extracted_author": "Radha M. (translated)",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "320.jpeg",
+      "extracted_title": "Surjotake Chhute Cheyechhilam (সূর্যটাকে ছুঁতে চেয়েছিলাম)",
+      "extracted_author": "Tone Partlic (translated)",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "323.jpeg",
+      "extracted_title": "Unclear — Vivekananda portrait on cover, title \"রাজমর রাজ্য\" (approx)",
+      "extracted_author": "Unclear author",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Title illegible; Vivekananda portrait suggests biography/related work — REVIEW NEEDED"
+    },
+    {
+      "image": "326.jpeg",
+      "extracted_title": "Amar Chhelobela (আমার ছেলেবেলা)",
+      "extracted_author": "Shubhaprasanna",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "327.jpeg",
+      "extracted_title": "Amar Chhelobela (আমার ছেলেবেলা)",
+      "extracted_author": "Ravi Shankar (sitar)",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "333.jpeg",
+      "extracted_title": "Baka Bagh (বাকা বাঘ)",
+      "extracted_author": "Roy Chowdhury, Upendra Kishore",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog under this title — REVIEW NEEDED"
+    },
+    {
+      "image": "338.jpeg",
+      "extracted_title": "Unclear — abstract geometric cover",
+      "extracted_author": "Unknown",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Title illegible from abstract cover design — REVIEW NEEDED"
+    },
+    {
+      "image": "340.jpeg",
+      "extracted_title": "Unclear — highly stylized cover text",
+      "extracted_author": "Kaushalya Kartik (approx)",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Title illegible; author partially readable — REVIEW NEEDED"
+    },
+    {
+      "image": "341.jpeg",
+      "extracted_title": "Kapilbabur Koler Gan (কপিলবাবুর কলের গান)",
+      "extracted_author": "Ray, Kinar",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "344.jpeg",
+      "extracted_title": "Unclear — stylized green Bengali text",
+      "extracted_author": "Unknown",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Title illegible from stylized design — REVIEW NEEDED"
+    },
+    {
+      "image": "347.jpeg",
+      "extracted_title": "Byomkesher Goyendagiri (ব্যোমকেশের গোয়েন্দাগিরি)",
+      "extracted_author": "Chakraborty, Sibaram",
+      "confidence_pct": 0,
+      "confidence_level": "No Match",
+      "notes": "Not found in catalog — REVIEW NEEDED"
+    },
+    {
+      "image": "162.jpeg",
+      "identified": "Babur by Pirimkul Kadirov",
+      "reason": "Translated work; not in catalog"
+    },
+    {
+      "image": "230.jpeg",
+      "identified": "Pinjare Basiya by Kalyani Datta",
+      "reason": "Not in catalog"
+    },
+    {
+      "image": "231.jpeg",
+      "identified": "Yayabar Omnibus by Yayabar",
+      "reason": "Not in catalog"
+    },
+    {
+      "image": "240.jpeg",
+      "identified": "Bengali anthology; editors: Samran Huda & Damu Mukhopadhyay",
+      "reason": "Title illegible; not found"
+    },
+    {
+      "image": "253.jpeg",
+      "identified": "Pathakanya — Lalmati anthology",
+      "reason": "Not in catalog"
+    },
+    {
+      "image": "254.jpeg",
+      "identified": "Title unclear; author partially readable",
+      "reason": "Image too hard to read; not in catalog"
+    },
+    {
+      "image": "255.jpeg",
+      "identified": "Unclear title by Ranjit Singh",
+      "reason": "Not in catalog"
+    },
+    {
+      "image": "262.jpeg",
+      "identified": "Kabi Jaydev O Sri Gitgobinda",
+      "reason": "Not in catalog"
+    },
+    {
+      "image": "346.jpeg",
+      "identified": "Ali Giribala by Mandar Mukhopadhyay",
+      "reason": "Not in catalog"
+    }
+  ],
+  "duplicates": [
+    {
+      "duplicate": "PXL_20220410_001400064.jpg",
+      "canonical": "265.jpeg",
+      "book": "Beda Rahasya (Uttarardha) — Sri Aurobindo"
+    },
+    {
+      "duplicate": "PXL_20220410_001321420.jpg",
+      "canonical": "269.jpeg",
+      "book": "Begum Mary Biswas — Bimal Mitra"
+    },
+    {
+      "duplicate": "286.jpeg",
+      "canonical": "267.jpeg",
+      "book": "Sharadindu Omnibus (maroon cover)"
+    },
+    {
+      "duplicate": "PXL_20220410_001333288.jpg",
+      "canonical": "267.jpeg",
+      "book": "Sharadindu Omnibus (maroon cover)"
+    },
+    {
+      "duplicate": "Scan.jpeg",
+      "canonical": "bt_roader_dhare.png",
+      "book": "B.T. Road er Dharey — Samaresh Basu"
+    },
+    {
+      "duplicate": "Scan 1.jpeg",
+      "canonical": "10ti_Uponyas.png",
+      "book": "Dosh ti Upanyash — Suchitra Bhattacharya"
+    },
+    {
+      "duplicate": "Scan 2.jpeg",
+      "canonical": "Chilekothar_Sepai.png",
+      "book": "Chilekothar Sepai — Akhtaruzzaman Elias"
+    },
+    {
+      "duplicate": "Scan 3.jpeg",
+      "canonical": "ghunpoka.png",
+      "book": "Ghunpoka — Shirshendu Mukhopadhyay"
+    },
+    {
+      "canonical": "149.jpeg",
+      "duplicates": "150.jpeg, 151.jpeg, 152.jpeg",
+      "book": "Parashuram Granthabali"
+    },
+    {
+      "canonical": "153.jpeg",
+      "duplicates": "154.jpeg",
+      "book": "Jim Corbett Omnibus"
+    },
+    {
+      "canonical": "225.jpeg",
+      "duplicates": "226.jpeg",
+      "book": "Sei Samay (Sunil Gangopadhyay)"
+    },
+    {
+      "canonical": "253.jpeg",
+      "duplicates": "PXL_20220410_001538369.PORTRAIT.jpg",
+      "book": "Pathakanya"
+    },
+    {
+      "canonical": "256.jpeg",
+      "duplicates": "PXL_20220410_001545685.PORTRAIT.jpg",
+      "book": "Achhi (Suchitra)"
+    },
+    {
+      "canonical": "261.jpeg",
+      "duplicates": "PXL_20220410_001553956.PORTRAIT.jpg",
+      "book": "Madhusudan Rachanabali"
+    },
+    {
+      "canonical": "260.jpeg",
+      "duplicates": "PXL_20220410_001612486.PORTRAIT.jpg",
+      "book": "Thogi (Sripantha)"
+    },
+    {
+      "canonical": "254.jpeg",
+      "duplicates": "PXL_20220410_001618819.PORTRAIT.jpg",
+      "book": "Unclear title"
+    },
+    {
+      "canonical": "262.jpeg",
+      "duplicates": "PXL_20220410_001626577.PORTRAIT.jpg",
+      "book": "Kabi Jaydev O Sri Gitgobinda"
+    }
+  ]
+}

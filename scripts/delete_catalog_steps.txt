@@ -1,0 +1,125 @@
+# Step 1: Backup first
+sudo koha-dump dishari_lib
+ls -lh /var/spool/koha/dishari_lib/
+
+# Step 2: Stop Zebra and Plack
+sudo koha-zebra --stop dishari_lib
+sudo koha-plack --stop dishari_lib
+
+# Step 3: Wipe catalog tables
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Items
+DELETE FROM items;
+DELETE FROM deleteditems;
+DELETE FROM item_bundles;
+DELETE FROM item_group_items;
+
+-- Biblio
+DELETE FROM biblio;
+DELETE FROM biblioitems;
+DELETE FROM deletedbiblio;
+DELETE FROM deletedbiblioitems;
+DELETE FROM biblio_metadata;
+DELETE FROM deleted_biblio_metadata;
+
+-- Holdings
+DELETE FROM holdings;
+DELETE FROM holdings_metadata;
+DELETE FROM deletedholdings;
+DELETE FROM deletedholdings_metadata;
+
+-- Search and indexing queues
+DELETE FROM zebraqueue;
+
+-- Acquisitions
+DELETE FROM aqorders;
+DELETE FROM aqorders_items;
+DELETE FROM aqbasket;
+DELETE FROM aqbasketgroups;
+DELETE FROM aqbooksellers;
+DELETE FROM aqinvoices;
+DELETE FROM aqbudgets;
+DELETE FROM aqbudgetperiods;
+DELETE FROM aqorderdelivery;
+
+-- Staged import data
+DELETE FROM import_batches;
+DELETE FROM import_records;
+DELETE FROM import_items;
+DELETE FROM import_record_matches;
+DELETE FROM import_auths;
+
+-- Serials
+DELETE FROM serial;
+DELETE FROM serialitems;
+DELETE FROM subscription;
+DELETE FROM subscriptionhistory;
+DELETE FROM subscriptionroutinglist;
+
+-- Course reserves
+DELETE FROM course_items;
+DELETE FROM course_reserves;
+
+-- Tags, reviews, ratings
+DELETE FROM tags_all;
+DELETE FROM tags_approval;
+DELETE FROM tags_index;
+DELETE FROM reviews;
+DELETE FROM rating;
+
+-- Holds and checkouts linked to items
+DELETE FROM reserves;
+DELETE FROM old_reserves;
+DELETE FROM issues;
+DELETE FROM old_issues;
+
+-- Reset auto increments
+ALTER TABLE biblio AUTO_INCREMENT = 1;
+ALTER TABLE biblioitems AUTO_INCREMENT = 1;
+ALTER TABLE items AUTO_INCREMENT = 1;
+ALTER TABLE biblio_metadata AUTO_INCREMENT = 1;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+
+# Step 4: Verify all zero
+SELECT 'biblio'         AS tbl, COUNT(*) AS cnt FROM biblio
+UNION SELECT 'biblioitems',     COUNT(*) FROM biblioitems
+UNION SELECT 'items',           COUNT(*) FROM items
+UNION SELECT 'biblio_metadata', COUNT(*) FROM biblio_metadata
+UNION SELECT 'zebraqueue',      COUNT(*) FROM zebraqueue
+UNION SELECT 'import_batches',  COUNT(*) FROM import_batches
+UNION SELECT 'issues',          COUNT(*) FROM issues
+UNION SELECT 'reserves',        COUNT(*) FROM reserves;
+
+-- All should return 0.
+
+# Step 5: Wipe Zebra index files
+sudo rm -rf /var/lib/koha/dishari_lib/biblios/key/*
+sudo rm -rf /var/lib/koha/dishari_lib/biblios/shadow/*
+sudo rm -rf /var/lib/koha/dishari_lib/biblios/tmp/*
+sudo rm -rf /var/lib/koha/dishari_lib/biblios/register/*
+
+# Step 6: Restart services
+sudo koha-zebra --start dishari_lib
+sudo koha-plack --start dishari_lib
+sudo systemctl restart apache2
+
+# Step 7: Import your MARC file
+sudo koha-shell dishari_lib -c "
+perl /usr/share/koha/bin/migration_tools/bulkmarcimport.pl \
+    -b \
+    -file /path/to/your/cleaned_catalog.mrc \
+    -v 1 \
+    2>&1 | tee /tmp/marc_import.log
+"
+# Then rebuild Zebra index:
+sudo koha-rebuild-zebra -v -f dishari_lib
+
+# Step 8: Verify import
+SELECT COUNT(*) AS bibliographic_records FROM biblio;
+SELECT COUNT(*) AS items FROM items;
+
+
+gemini api key AIzaSyAic5ZcoQmmph6VRBkycwQGxHalQQ7V8Rk
