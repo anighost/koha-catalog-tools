@@ -30,8 +30,11 @@ except ImportError:
 # ==========================================
 # CONFIGURATION & POSITIONS (0-indexed)
 # ==========================================
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
 INPUT_FILE = '/Users/anirbanghosh/Dishari/Library/Catalog/Catalog_AI/Catalog_Input/catalog_to_be_cleaned_v1.csv'
-STATE_FILE = 'koha_session_meta.json'
+STATE_FILE = os.path.join(PROJECT_ROOT, 'koha_session_meta.json')
 
 COL_ISBN       = 0;  COL_LANG      = 1;  COL_AUTHOR    = 2;  COL_TITLE    = 3
 COL_SUBTITLE   = 4;  COL_EDITION   = 6;  COL_PLACE     = 7;  COL_PUBLISHER= 8
@@ -63,7 +66,7 @@ timestamp  = datetime.now().strftime('%Y%m%d_%H%M')
 raw_base   = os.path.splitext(os.path.basename(INPUT_FILE))[0]
 base_name  = raw_base.replace('_to_be_cleaned', '')
 
-OUTPUT_DIR  = "output"
+OUTPUT_DIR  = os.path.join(PROJECT_ROOT, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 OUTPUT_MRC  = os.path.join(OUTPUT_DIR, f"cleaned_{base_name}_{timestamp}.mrc")
 OUTPUT_XLSX = os.path.join(OUTPUT_DIR, f"cleaned_{base_name}_{timestamp}.xlsx")

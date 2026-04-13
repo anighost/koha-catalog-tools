@@ -55,6 +55,10 @@ body {
   justify-content: center;
   align-items: center !important;
   background-color: var(--crimson);
+  border-radius: 0 0 20px 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.30);
+  position: relative;
+  z-index: 100;
 }
 
 .navbar-nav > li > a,
@@ -92,15 +96,21 @@ body {
 /* ── Search box hero ── */
 #opac-main-search {
   background: #ffffff;
-  margin: 40px 0 0 0; /* original: 80px 15px 0 15px */
-  padding: 150px 80px;
+  /* Negative side margins break out of Bootstrap container padding (15px each side)
+     so the hero matches the full-width navbar exactly */
+  margin: 8px -15px 0;
+  padding: 100px 80px 80px;
   background-color: transparent;
   background-image:
     linear-gradient(rgba(255,255,255,0.04), rgba(30,30,30,0.93)),
     url("/opac-tmpl/bootstrap/images/hero.jpg");
-  border-radius: 0;
+  border-radius: 0 0 24px 24px;
   background-size: cover;
+  background-position: center 25%;
   background-repeat: no-repeat;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.22);
+  position: relative;
+  z-index: 90;
 }
 
 #opac-main-search label {
@@ -120,6 +130,24 @@ body {
 /* ── Search input ── */
 .mastheadsearch { background: none; }
 .mastheadsearch label { color: #001a4d; }
+
+/* Search submit button — crimson to match theme */
+#searchsubmit,
+.mastheadsearch .btn,
+#opac-main-search .btn-primary {
+  background-color: var(--crimson) !important;
+  background-image: none !important;
+  border-color: var(--crimson) !important;
+  color: #fff !important;
+  border-radius: 0 2px 2px 0 !important;
+  transition: background-color 0.2s !important;
+}
+#searchsubmit:hover,
+.mastheadsearch .btn:hover,
+#opac-main-search .btn-primary:hover {
+  background-color: var(--crimson-dk) !important;
+  border-color: var(--crimson-dk) !important;
+}
 
 .form-control:focus,
 input[type=text]:focus,
@@ -165,39 +193,49 @@ input[type=password]:focus {
 .main {
   border: none;
   margin: 15px;
-  padding: 1rem 0;
+  padding: 0.25rem 0;
   background-color: transparent;
 }
 
-.maincontent {
+/* min-height only on homepage — advsearch/detail/results don't need it */
+body:not(#catalog):not(#results):not(#detail) .maincontent {
   min-height: 485px;
+}
+
+/* On search/detail pages, maincontent is a Bootstrap col — don't override its grid width */
+body:not(#results):not(#opac-detail) .maincontent {
   margin-left: 0 !important;
   margin-right: 0 !important;
   width: 100% !important;
   max-width: 100% !important;
 }
 
-/* ── jQuery UI Tabs — modernized pill style ── */
-#tabs.ui-tabs {
-  background: var(--surface);
-  border: none;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  padding: 24px 24px 28px;
+/* ── Shelf tabs — dark cinema card ── */
+#tabs.ui-tabs,
+#tabs {
+  background: linear-gradient(135deg, #312e2f 0%, #403c3c 55%, #282425 100%);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06);
+  padding: 12px 28px 12px;
   margin: 0 0 32px;
 }
 
-#tabs .ui-tabs-nav {
+/* Tab nav bar */
+#tabs .ui-tabs-nav,
+#tabs > ul {
   background: none;
   border: none;
-  border-bottom: 2px solid var(--border);
-  padding: 0 0 0 0;
-  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  padding: 0;
+  margin-bottom: 0;
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  list-style: none;
 }
 
-#tabs .ui-tabs-nav li {
+#tabs .ui-tabs-nav li,
+#tabs > ul > li {
   background: transparent;
   border: none;
   border-radius: 0;
@@ -205,52 +243,91 @@ input[type=password]:focus {
   top: 0;
 }
 
-#tabs .ui-tabs-nav li a {
+/* Tab labels — light on dark */
+#tabs .ui-tabs-nav li a,
+#tabs > ul > li a {
   font-family: 'Poppins', sans-serif;
   font-weight: 500;
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  padding: 10px 20px;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.45);
+  padding: 10px 22px;
   display: block;
   border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
+  margin-bottom: -1px;
   transition: color 0.2s, border-color 0.2s;
   text-decoration: none;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 
-#tabs .ui-tabs-nav li:hover a {
-  color: var(--crimson);
+#tabs .ui-tabs-nav li:hover a,
+#tabs > ul > li:hover a {
+  color: rgba(255,255,255,0.85);
 }
 
+/* Active tab — white text, crimson underline */
 #tabs .ui-tabs-nav li.ui-tabs-active a,
-#tabs .ui-tabs-nav li.ui-state-active a {
-  color: var(--crimson);
+#tabs .ui-tabs-nav li.ui-state-active a,
+#tabs > ul > li.dpl-tab-active a {
+  color: #ffffff;
   border-bottom-color: var(--crimson);
   font-weight: 600;
 }
 
-#tabs .ui-tabs-panel {
-  padding: 0;
+/* Panels — breathing room around the coverflow */
+#tabs .ui-tabs-panel,
+#tabs > div[id^="tabs-"] {
+  padding: 12px 8px 14px;
   border: none;
   background: transparent;
+  overflow: visible;
 }
 
-/* Flipster / coverflow container */
+/* Flipster / coverflow */
 .flipster {
-  margin-top: 20px;
+  margin-top: 0;
+  background: transparent !important;
 }
 
-.flipster__button { top: 30%; }
+/* Nav arrows — visible on dark */
+.flipster__button {
+  top: 32%;
+  color: rgba(255,255,255,0.6) !important;
+  background: rgba(255,255,255,0.08) !important;
+  border-radius: 50% !important;
+  width: 36px !important;
+  height: 36px !important;
+  transition: background 0.2s, color 0.2s !important;
+}
+.flipster__button:hover {
+  color: #fff !important;
+  background: rgba(203,80,81,0.55) !important;
+}
 
+/* Book title / caption below covers */
 #staffpicksboxshadow {
   box-shadow: none !important;
   text-shadow: none !important;
   font-weight: 500 !important;
   background-color: transparent !important;
+  color: rgba(255,255,255,0.75) !important;
 }
 
-#staffpicksboxshadow p {
+#staffpicksboxshadow p,
+.flipster__item__content p,
+.flipster__item__content span {
   font-family: 'Poppins', sans-serif !important;
+  color: rgba(255,255,255,0.7) !important;
+}
+
+/* Cover images — flipster adds .flipster__item class; override inline img dimensions */
+.flipster__item img {
+  height: 180px !important;
+  max-height: 180px !important;
+  width: auto !important;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.55);
 }
 
 /* ── Shelf wrapper (houses the tabs card) ── */
@@ -348,6 +425,7 @@ input[type=password]:focus {
 
 .dpl-day {
   padding: 6px 0;
+  font-family: 'Poppins', sans-serif;
   font-weight: 500;
   color: var(--text);
   width: 55%;
@@ -355,9 +433,10 @@ input[type=password]:focus {
 
 .dpl-time {
   padding: 6px 0;
+  font-family: 'Poppins', sans-serif;
   color: var(--text-muted);
   text-align: right;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 .dpl-closed .dpl-time {
@@ -381,6 +460,7 @@ input[type=password]:focus {
 .dpl-contact-list li:last-child { margin-bottom: 0; }
 
 .dpl-contact-label {
+  font-family: 'Poppins', sans-serif;
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -389,6 +469,7 @@ input[type=password]:focus {
 }
 
 .dpl-contact-value {
+  font-family: 'Poppins', sans-serif;
   font-size: 0.82rem;
   color: var(--text);
   line-height: 1.45;
@@ -417,6 +498,7 @@ input[type=password]:focus {
 }
 
 .dpl-stat-num {
+  font-family: 'Poppins', sans-serif;
   font-size: 1.5rem;
   font-weight: 700;
   color: #c9922a;
@@ -424,6 +506,7 @@ input[type=password]:focus {
 }
 
 .dpl-stat-label {
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   color: var(--text-muted);
   margin-top: 3px;
@@ -476,6 +559,7 @@ input[type=password]:focus {
 
 .dpl-notice-date {
   flex-shrink: 0;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.72rem;
   color: var(--text-muted);
   width: 72px;
@@ -486,6 +570,7 @@ input[type=password]:focus {
 
 .dpl-notice-text {
   margin: 0;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.85rem;
   line-height: 1.6;
   color: var(--text);
@@ -493,6 +578,7 @@ input[type=password]:focus {
 
 .dpl-notice-mode {
   display: inline-block;
+  font-family: 'Poppins', sans-serif;
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -513,20 +599,45 @@ input[type=password]:focus {
 }
 
 .dpl-notices-sub {
-  font-size: 0.85rem;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.78rem;
   color: var(--text-muted);
   margin: -8px 0 14px;
   font-style: italic;
 }
 
-.dpl-notices-footer {
-  margin-top: 16px;
-  font-size: 0.78rem;
-  color: var(--text-muted);
+.dpl-mission {
+  margin-top: 24px;
+  padding: 20px 32px;
+  background: linear-gradient(135deg, #fdf8f8 0%, #f9f9f9 100%);
+  border-radius: var(--radius);
+  border-top: 3px solid var(--crimson);
   text-align: center;
-  line-height: 1.6;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.07);
+}
+
+.dpl-mission-text {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.8;
+  font-style: italic;
+  margin: 0 auto 12px;
+  max-width: 720px;
+}
+
+.dpl-nonprofit-badge {
+  display: inline-block;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.70rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--crimson);
+  border: 1px solid var(--crimson);
+  padding: 3px 14px;
+  border-radius: 20px;
+  opacity: 0.85;
 }
 
 /* ── Typography ── */
@@ -634,11 +745,12 @@ th {
   background: linear-gradient(to right, #504B50 0%, #555555 50%, #7F7F81 100%);
   font-size: 85%;
   list-style: none outside none;
-  margin: 15px;
-  padding: 5px 10px;
-  border-radius: 0;
+  margin: 6px 0 6px;
+  padding: 5px 14px;
+  border-radius: 8px;
   position: relative;
   z-index: 10;
+  box-shadow: var(--shadow-sm);
 }
 .breadcrumb a { color: #fff; }
 .breadcrumb-item.active a:active,
@@ -721,8 +833,9 @@ th {
 /* ── Footer ── */
 #opaccredits {
   background: linear-gradient(to right, #504B50 0%, #555555 50%, #7F7F81 100%);
-  margin-left: 15px;
-  margin-right: 15px;
+  margin: 0 15px 12px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
 }
 
 #opaccredits span {
@@ -737,6 +850,30 @@ th {
   padding-right: 15px;
 }
 
+/* ── Scroll-to-top button ── */
+#scrolltop {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 42px !important;
+  height: 42px !important;
+  background: var(--crimson) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 50% !important;
+  box-shadow: 0 4px 14px rgba(203,80,81,0.40) !important;
+  font-size: 1.1rem !important;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.2s !important;
+  text-decoration: none !important;
+}
+
+#scrolltop:hover {
+  background: var(--crimson-dk) !important;
+  box-shadow: 0 6px 20px rgba(203,80,81,0.55) !important;
+  transform: translateY(-2px);
+}
+
 /* ── Misc ── */
 legend { font-weight: 500; }
 
@@ -748,6 +885,270 @@ label {
 }
 
 .no-image { display: none !important; }
+
+/* ═══════════════════════════════════════════════
+   Search Results Page  (body#results)
+   ═══════════════════════════════════════════════ */
+
+/* ── Facets sidebar — "Refine your search" ── */
+#facetcontainer {
+  padding: 0;
+}
+
+#search-facets {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+
+#search-facets h4 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text);
+  margin: 0 0 8px;
+  padding-bottom: 7px;
+  border-bottom: 2px solid var(--crimson);
+}
+
+#search-facets ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+}
+
+#search-facets li {
+  font-size: 0.79rem;
+  padding: 3px 0;
+  border-bottom: 1px solid #f5f5f5;
+  line-height: 1.4;
+}
+
+#search-facets li:last-child { border-bottom: none; }
+
+#search-facets a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+#search-facets a:hover { color: var(--crimson); }
+
+/* ── Toolbar (sort + bulk actions) ── */
+body#results #toolbar {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  margin-bottom: 10px;
+}
+
+body#results .selections-toolbar {
+  background: #fafafa;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+}
+
+/* ── Results page background — gives card rows contrast ── */
+body#results .maincontent {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 14px 16px 20px;
+}
+
+/* ── "Your search returned X results" header ── */
+body#results #numresults,
+body#results .numresults {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+body#results #numresults strong,
+body#results .numresults strong {
+  color: var(--crimson);
+  font-weight: 700;
+}
+
+/* ── Result table — scoped card style ── */
+body#results table.table-striped {
+  border-collapse: separate !important;
+  border-spacing: 0 8px !important;
+  width: 100%;
+}
+
+/* Remove Bootstrap striping on results page only */
+body#results table.table-striped > tbody > tr:nth-of-type(odd),
+body#results table.table-striped > tbody > tr:nth-of-type(even) {
+  background-color: transparent !important;
+}
+
+/* Card tds — white background + shadow (tr shadows don't render in browsers) */
+body#results table.table-striped > tbody > tr > td {
+  background: var(--surface) !important;
+  border-top: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-sm);
+  padding: 14px 10px !important;
+  vertical-align: top;
+  transition: box-shadow 0.18s, background 0.18s;
+}
+
+/* Alternating row tint — cool light gray on even rows (distinct from warm hover) */
+body#results table.table-striped > tbody > tr:nth-of-type(even) > td {
+  background: #f4f6f8 !important;
+}
+
+body#results table.table-striped > tbody > tr > td:first-child {
+  border-left: 3px solid var(--crimson) !important;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+body#results table.table-striped > tbody > tr > td:last-child {
+  border-right: 1px solid var(--border) !important;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+/* Hover — lift the entire row by brightening each td */
+body#results table.table-striped > tbody > tr:hover > td {
+  background: #fdf5f5 !important;
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Cover image ── */
+body#results td.covercol {
+  width: 90px;
+  min-width: 80px;
+  text-align: center;
+  vertical-align: top;
+  padding-top: 16px !important;
+}
+
+body#results td.covercol img {
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  max-height: 110px;
+  width: auto;
+}
+
+/* ── Bibliographic info ── */
+body#results a.title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--crimson) !important;
+  text-decoration: none;
+}
+
+body#results a.title:hover {
+  color: var(--crimson-dk) !important;
+  text-decoration: underline;
+}
+
+body#results .results_summary {
+  font-size: 0.81rem;
+  color: var(--text-muted);
+  margin: 2px 0;
+  line-height: 1.5;
+}
+
+body#results .results_summary .label {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+/* Author inline list */
+body#results ul.author {
+  display: inline;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+body#results ul.author li { display: inline; }
+body#results ul.author a { color: var(--text-muted); font-size: 0.85rem; }
+body#results ul.author a:hover { color: var(--crimson); }
+
+/* ── Availability — Koha outputs plain text, not span.available badges ── */
+body#results .results_summary.availability {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #1a6b7a;
+  font-weight: 500;
+}
+
+/* ── Action buttons (Place hold, Save to list, etc.) ── */
+body#results .actions a,
+body#results .actions button,
+body#results p.actions a {
+  font-size: 0.75rem !important;
+  padding: 3px 9px !important;
+  border-radius: 5px !important;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  text-decoration: none;
+  margin-right: 4px;
+  display: inline-block;
+  transition: background 0.15s, color 0.15s;
+}
+
+body#results .actions a.btn-primary,
+body#results p.actions a.btn-primary {
+  background: var(--crimson) !important;
+  border-color: var(--crimson) !important;
+  color: #fff !important;
+  background-image: none !important;
+}
+body#results .actions a.btn-primary:hover,
+body#results p.actions a.btn-primary:hover {
+  background: var(--crimson-dk) !important;
+  border-color: var(--crimson-dk) !important;
+}
+
+body#results .actions a.btn-link,
+body#results p.actions a.btn-link {
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+}
+body#results .actions a.btn-link:hover,
+body#results p.actions a.btn-link:hover {
+  color: var(--crimson) !important;
+  border-color: var(--crimson) !important;
+  background: #fdf5f5 !important;
+}
+
+/* ── Pagination ── */
+.pagination .page-link {
+  color: var(--crimson);
+  border-color: var(--border);
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.85rem;
+  border-radius: 6px !important;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: var(--crimson);
+  border-color: var(--crimson);
+  color: #fff;
+}
+
+.pagination .page-link:hover {
+  color: var(--crimson-dk);
+  background-color: #f8f0f0;
+}
+
+/* ── Tighten top gap ── */
+body#results .main {
+  padding-top: 0;
+}
 
 .col-lg-3:empty { background-color: transparent; }
 
@@ -787,24 +1188,204 @@ input[type="checkbox"]:focus + label::before {
   outline: rgb(59,153,252) auto 5px;
 }
 
+/* ── Login Modal ── */
+.dpl-login-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.dpl-login-overlay.is-open {
+  display: flex;
+  background: rgba(0,0,0,0.48);
+  backdrop-filter: blur(2px);
+}
+
+.dpl-login-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 40px 40px 32px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  border-top: 4px solid var(--crimson);
+  animation: dpl-modal-in 0.2s ease;
+}
+
+.dpl-login-card {
+  animation: dpl-modal-in 0.2s ease;
+}
+@keyframes dpl-modal-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+
+.dpl-login-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.dpl-login-close:hover { background: #f5f5f5; color: var(--text); }
+
+.dpl-login-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 20px;
+}
+
+/* Koha's #login form inside modal */
+.dpl-login-card #login {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+.dpl-login-card #login fieldset { border: none; margin: 0; padding: 0; }
+.dpl-login-card #login legend   { display: none; }
+
+.dpl-login-card #login label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 14px 0 4px;
+  display: block;
+  cursor: default;
+}
+
+.dpl-login-card #login input[type="text"],
+.dpl-login-card #login input[type="password"] {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-family: 'Poppins', sans-serif;
+  color: var(--text);
+  background: #fafafa;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  box-sizing: border-box;
+  height: auto;
+}
+.dpl-login-card #login input[type="text"]:focus,
+.dpl-login-card #login input[type="password"]:focus {
+  border-color: var(--crimson);
+  box-shadow: 0 0 0 3px rgba(203,80,81,0.10);
+  background: #fff;
+  outline: none;
+}
+
+/* Submit — override global .btn-primary */
+.dpl-login-card #login input[type="submit"],
+.dpl-login-card #login button[type="submit"],
+.dpl-login-card #login .btn-primary {
+  width: 100% !important;
+  margin-top: 22px !important;
+  padding: 11px 16px !important;
+  background: var(--crimson) !important;
+  background-image: none !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 7px !important;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  height: auto !important;
+  box-shadow: none;
+  letter-spacing: 0.01em;
+  transition: background 0.18s, box-shadow 0.18s;
+}
+.dpl-login-card #login input[type="submit"]:hover,
+.dpl-login-card #login button[type="submit"]:hover,
+.dpl-login-card #login .btn-primary:hover {
+  background: var(--crimson-dk) !important;
+  box-shadow: 0 4px 14px rgba(203,80,81,0.28) !important;
+}
+
+/* Links and show-password */
+.dpl-login-card #login label[for="show_password"] {
+  font-size: 0.78rem;
+  margin-top: 10px;
+  color: var(--text-muted);
+}
+#OpacLoginInstructions {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+#OpacLoginInstructions a { color: var(--crimson) !important; }
+
 /* ── Responsive: tablet (max 900px) ── */
 @media (max-width: 900px) {
-  .dpl-cards-row {
-    grid-template-columns: 50% 50%;
+  /* Hero — reduce vertical height */
+  #opac-main-search {
+    margin: 6px -15px 0;
+    padding: 70px 30px 60px;
+    border-radius: 0 0 18px 18px;
   }
+  #opac-main-search label {
+    font-size: 115%;
+  }
+
+  /* Quick cards — 3 across on tablet */
+  .dpl-cards-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Stats — intermediate size at tablet */
+  .dpl-stat-num { font-size: 1.35rem; }
+
+  /* Info row — stack */
   .dpl-info-row {
     grid-template-columns: 100%;
   }
+
+  /* Shelf + notices — add side breathing room */
   .dpl-shelf-wrap {
     margin: 0 8px 24px;
   }
   .dpl-notices-wrap {
     margin: 0 8px 24px;
   }
+
+  /* Tabs — reduce side padding */
+  #tabs.ui-tabs,
+  #tabs {
+    padding: 12px 16px 10px;
+  }
+
+  /* Photo credit — pull in from edge */
+  #pic-credit {
+    right: 20px !important;
+  }
 }
 
 /* ── Responsive: mobile (max 600px) ── */
 @media (max-width: 600px) {
+  /* Navbar */
+  .navbar {
+    border-radius: 0 0 14px 14px;
+  }
+
+  /* Logo */
   #logo a.navbar-brand {
     width: 48px !important;
     height: 28px !important;
@@ -818,14 +1399,25 @@ input[type="checkbox"]:focus + label::before {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
   }
+
+  /* Hero */
   #opac-main-search {
-    padding: 40px 16px;
-    margin-top: 0;
-    margin-left: 0;
-    margin-right: 0;
+    margin: 4px -15px 0;
+    padding: 44px 16px 38px;
+    border-radius: 0 0 14px 14px;
   }
+  #opac-main-search label {
+    font-size: 100%;
+  }
+
+  /* Photo credit — hide on very small screens, too cluttered */
+  #pic-credit {
+    display: none !important;
+  }
+
+  /* Quick cards — 2-column grid */
   .dpl-cards-row {
-    grid-template-columns: 50% 50%;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
     margin: 16px 8px;
   }
@@ -838,24 +1430,53 @@ input[type="checkbox"]:focus + label::before {
   .dpl-qcard-label {
     font-size: 0.75rem;
   }
+
+  /* Info row */
   .dpl-info-row {
     grid-template-columns: 100%;
     margin: 0 8px 24px;
   }
-  #tabs.ui-tabs {
-    padding: 14px 12px;
+
+  /* Tabs — tight side padding for narrow screens */
+  #tabs.ui-tabs,
+  #tabs {
+    padding: 10px 12px 8px;
     margin: 0;
+    border-radius: 10px;
   }
-  #tabs .ui-tabs-nav li a {
+  #tabs .ui-tabs-nav,
+  #tabs > ul {
+    gap: 0;
+  }
+  #tabs .ui-tabs-nav li a,
+  #tabs > ul > li a {
     padding: 8px 12px;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
   }
+
+  /* Detail page tabs — also shrink on mobile */
+  body#opac-detail .nav-tabs .nav-link,
+  body#opac-detail .ui-tabs-nav li a { font-size: 0.76rem; padding: 6px 10px; }
+  #tabs .ui-tabs-panel,
+  #tabs > div[id^="tabs-"] {
+    padding: 8px 4px 0;
+  }
+
+  /* Flipster arrows — slightly smaller on mobile */
+  .flipster__button {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  /* Stats */
   .dpl-stats {
     justify-content: space-around;
   }
   .dpl-stat-num {
     font-size: 1.2rem;
   }
+
+  /* Notices */
   .dpl-notice {
     flex-direction: column;
     gap: 4px;
@@ -866,4 +1487,386 @@ input[type="checkbox"]:focus + label::before {
   .dpl-notices-wrap {
     margin: 0 8px 24px;
   }
+
+  /* Login modal */
+  .dpl-login-card {
+    padding: 28px 20px 24px;
+    border-radius: 10px;
+  }
+
+  /* Breadcrumb */
+  .breadcrumb {
+    margin: 10px 8px 6px;
+    border-radius: 6px;
+  }
 }
+
+/* ═══════════════════════════════════════════════
+   Advanced Search Page  (body#catalog)
+   ═══════════════════════════════════════════════ */
+
+/* ── Search form card ── */
+#advsearch {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 24px 28px;
+  margin-bottom: 20px;
+}
+
+/* ── Inputs + selects ── */
+#advsearch select.form-control,
+#advsearch input.form-control,
+#advsearch input[type="text"] {
+  border: 1.5px solid var(--border);
+  border-radius: 7px !important;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.875rem;
+  height: 38px;
+  padding: 6px 10px;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  box-shadow: none !important;
+}
+#advsearch select.form-control:focus,
+#advsearch input.form-control:focus,
+#advsearch input[type="text"]:focus {
+  border-color: var(--crimson) !important;
+  box-shadow: 0 0 0 3px rgba(203,80,81,0.10) !important;
+  outline: none;
+}
+
+/* ── Search button — crimson ── */
+#advsearch input[type="submit"],
+#advsearch .btn-primary {
+  background: var(--crimson) !important;
+  background-image: none !important;
+  border-color: var(--crimson) !important;
+  color: #fff !important;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 7px !important;
+  padding: 7px 22px !important;
+  transition: background 0.18s;
+}
+#advsearch input[type="submit"]:hover,
+#advsearch .btn-primary:hover {
+  background: var(--crimson-dk) !important;
+  border-color: var(--crimson-dk) !important;
+}
+
+/* ── More options / New search — ghost ── */
+#advsearch .btn-default,
+#advsearch .btn-secondary {
+  background: transparent !important;
+  background-image: none !important;
+  border: 1.5px solid var(--border) !important;
+  color: var(--text-muted) !important;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border-radius: 7px !important;
+  padding: 7px 18px !important;
+  transition: border-color 0.15s, color 0.15s;
+}
+#advsearch .btn-default:hover,
+#advsearch .btn-secondary:hover {
+  border-color: var(--crimson) !important;
+  color: var(--crimson) !important;
+  background: #fdf5f5 !important;
+}
+
+/* ── Fieldset cards (Item Type, Availability, Date, Language) ── */
+#advsearch fieldset,
+#itemtypefilter,
+#availabilityfilter,
+#pubdaterange,
+#langfilter {
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: 14px 18px !important;
+  margin-bottom: 14px !important;
+}
+
+#advsearch fieldset legend,
+#itemtypefilter legend,
+#availabilityfilter legend,
+#pubdaterange legend,
+#langfilter legend {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--crimson);
+  padding: 0 8px;
+  width: auto;
+  border: none;
+  margin-bottom: 10px;
+}
+
+/* Item type labels */
+#itemtypefilter label {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.8rem;
+  color: var(--text);
+  margin-top: 4px;
+}
+#itemtypefilter img { opacity: 0.7; transition: opacity 0.15s; }
+#itemtypefilter label:hover img { opacity: 1; }
+
+/* Date range inputs */
+#pubdaterange input[type="text"] {
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.85rem;
+  padding: 5px 10px;
+  width: 90px;
+  height: auto;
+  transition: border-color 0.18s;
+}
+#pubdaterange input[type="text"]:focus {
+  border-color: var(--crimson);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(203,80,81,0.10);
+}
+
+/* Language select */
+#langfilter select {
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.85rem;
+  padding: 5px 10px;
+  transition: border-color 0.18s;
+}
+#langfilter select:focus {
+  border-color: var(--crimson);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(203,80,81,0.10);
+}
+
+/* ═══════════════════════════════════════════════
+   Biblio Detail Page  (body#opac-detail)
+   ═══════════════════════════════════════════════ */
+
+/* ── Tabs — top (Normal/MARC/ISBD) and bottom (Comments/Images/Tags) ── */
+body#opac-detail .nav-tabs {
+  border-bottom: 2px solid var(--crimson);
+  margin-bottom: 16px;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+body#opac-detail .nav-tabs .nav-link,
+body#opac-detail .ui-tabs-nav li a {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text) !important;
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  border-bottom: none !important;
+  border-radius: 7px 7px 0 0 !important;
+  padding: 7px 16px;
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+body#opac-detail .nav-tabs .nav-link:hover,
+body#opac-detail .ui-tabs-nav li a:hover {
+  color: var(--crimson) !important;
+  background: #fdf5f5 !important;
+  border-color: rgba(203,80,81,0.35) !important;
+}
+
+body#opac-detail .nav-tabs .nav-link.active,
+body#opac-detail .ui-tabs-nav li.ui-tabs-active a,
+body#opac-detail .ui-tabs-nav li.ui-state-active a {
+  color: var(--crimson) !important;
+  background: var(--surface) !important;
+  border-color: var(--crimson) !important;
+  border-bottom-color: var(--surface) !important;
+  font-weight: 600;
+}
+
+/* ── Tab content box — rounded, shadowed ── */
+body#opac-detail .tab-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 20px;
+}
+
+/* ── Title and metadata ── */
+body#opac-detail h1.title,
+body#opac-detail #bibliodetails h1 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+body#opac-detail .results_summary {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 3px 0;
+  line-height: 1.65;
+}
+
+body#opac-detail .results_summary .label {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+body#opac-detail .results_summary a {
+  color: var(--crimson);
+  text-decoration: none;
+}
+body#opac-detail .results_summary a:hover { text-decoration: underline; }
+
+/* ── Subject tag pills ── */
+body#opac-detail .subject a,
+body#opac-detail .results_summary.subject a {
+  display: inline-block;
+  background: #fdf0f0;
+  color: var(--crimson);
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(203,80,81,0.25);
+  margin: 2px 3px 2px 0;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+body#opac-detail .subject a:hover { background: #fce0e0; }
+
+/* ── Right sidebar action buttons ── */
+body#opac-detail #action {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+body#opac-detail #action ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+body#opac-detail #action li {
+  margin-bottom: 6px;
+}
+
+body#opac-detail #action a {
+  display: block;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 7px;
+  text-decoration: none;
+  color: var(--text);
+  border: 1px solid var(--border);
+  background: #fafafa;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+body#opac-detail #action a:hover {
+  border-color: var(--crimson);
+  color: var(--crimson);
+  background: #fdf5f5;
+}
+
+/* Place hold — crimson primary */
+body#opac-detail #action a[href*="opac-reserve"],
+body#opac-detail #action a[href*="reserve"] {
+  background: var(--crimson) !important;
+  color: #fff !important;
+  border-color: var(--crimson) !important;
+  font-weight: 600;
+}
+body#opac-detail #action a[href*="opac-reserve"]:hover,
+body#opac-detail #action a[href*="reserve"]:hover {
+  background: var(--crimson-dk) !important;
+}
+
+/* ── Holdings section header ── */
+body#opac-detail #holdings h2,
+body#opac-detail h2#holdings_label,
+body#opac-detail h3.holdings {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--crimson);
+  margin-bottom: 14px;
+}
+
+/* ── Holdings table — card rows ── */
+body#opac-detail #holdings-table,
+body#opac-detail table.holdingst,
+body#opac-detail table#holdings-table {
+  border-collapse: separate !important;
+  border-spacing: 0 6px !important;
+  width: 100%;
+}
+
+body#opac-detail #holdings-table th,
+body#opac-detail table.holdingst th {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: transparent !important;
+  border-bottom: 2px solid var(--crimson) !important;
+  padding: 6px 10px;
+}
+
+body#opac-detail #holdings-table td,
+body#opac-detail table.holdingst td {
+  background: var(--surface) !important;
+  border-top: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding: 10px !important;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-sm);
+  vertical-align: middle;
+}
+
+body#opac-detail #holdings-table td:first-child,
+body#opac-detail table.holdingst td:first-child {
+  border-left: 3px solid var(--crimson) !important;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+body#opac-detail #holdings-table td:last-child,
+body#opac-detail table.holdingst td:last-child {
+  border-right: 1px solid var(--border) !important;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+body#opac-detail #holdings-table tr:hover td,
+body#opac-detail table.holdingst tr:hover td {
+  background: #fdf7f7 !important;
+}
+
+/* Status in holdings */
+body#opac-detail .available,
+body#opac-detail span.item-status.available { color: #1a6b7a; font-weight: 600; }
+body#opac-detail .checkedout,
+body#opac-detail span.item-status.checkedout { color: #e65100; font-weight: 600; }
