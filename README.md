@@ -20,6 +20,8 @@ All output files are written to an `output/` subdirectory (created automatically
 |--------|-------------|
 | `clean_catalog.py` | Main script — no external API needed |
 | `clean_catalog_llm.py` | Extended version — uses Claude API to generate additional phonetic variant titles (MARC 246) and subject headings (MARC 650) for better search coverage |
+| `scripts/prepare_covers.py` | Reads `image_mapping/image_mapping_output.xlsx`, copies matched cover images from the DONE directory to UPLOAD as `<biblionumber>.jpeg`, and writes `datalink.txt` in the format Koha expects for ZIP batch upload. Supports `--dry-run` to preview without copying. |
+| `scripts/upload_covers.py` | Logs into the Koha staff portal and uploads cover images one by one via the `upload-cover-image.pl` endpoint. Requires `KOHA_USER` and `KOHA_PASS` environment variables. Optionally accepts a single biblionumber argument for test mode. |
 
 ---
 
@@ -84,6 +86,52 @@ python clean_catalog_llm.py
 ```
 
 On first run it enriches all unique titles via Claude API (batches of 20), caches results in `koha_session_meta.json` under `llm_cache`, and adds extra MARC 246 and 650 fields. Subsequent runs skip already-cached titles — no repeat API calls. Without the API key set, the script behaves identically to `clean_catalog.py`.
+
+---
+
+## Cover Image Workflow
+
+Cover images are matched to catalog records and uploaded to Koha in two steps.
+
+### 1. Prepare (`scripts/prepare_covers.py`)
+
+```bash
+python scripts/prepare_covers.py [--dry-run]
+```
+
+Reads `image_mapping/image_mapping_output.xlsx` (columns: Image File Name, Confidence Level, biblionumber), copies each matched image from the DONE directory to the UPLOAD directory as `<biblionumber>.jpeg`, and writes `datalink.txt`:
+
+```
+biblionumber,filename
+1234,1234.jpeg
+```
+
+The `datalink.txt` + all `.jpeg` files can then be zipped and uploaded via Koha Admin → Tools → Upload local cover image.
+
+### 2. Upload individually (`scripts/upload_covers.py`)
+
+```bash
+export KOHA_USER=admin
+export KOHA_PASS=yourpassword
+python scripts/upload_covers.py          # upload all images in UPLOAD dir
+python scripts/upload_covers.py 1234     # test mode — upload biblionumber 1234 only
+```
+
+Authenticates against the Koha staff portal and posts each image to `upload-cover-image.pl`. Fetches a fresh CSRF token before every upload. Prints OK / FAIL per image and a summary at the end.
+
+---
+
+## OPAC Customization
+
+Theme files for the Koha OPAC are in the `opac/` directory. Paste each file's contents into the corresponding Koha system preference (Admin → System Preferences → OPAC):
+
+| File | Koha System Preference |
+|------|------------------------|
+| `opac/opac_user_css.css` | `OPACUserCSS` |
+| `opac/opac_user_js.js` | `OPACUserJS` |
+| `opac/opac_main_user_block.html` | `OpacMainUserBlock` |
+
+The CSS implements a Poppins + crimson (`#CB5051`) theme with custom styling for the homepage, coverflow shelf, search results, advanced search, and biblio detail pages.
 
 ---
 
