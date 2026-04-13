@@ -1317,11 +1317,36 @@ input[type="checkbox"]:focus + label::before {
   box-shadow: 0 4px 14px rgba(203,80,81,0.28) !important;
 }
 
-/* Links and show-password */
-.dpl-login-card #login label[for="show_password"] {
+/* Hide Koha's native show-password toggle (replaced by JS-injected .dpl-show-pwd-toggle) */
+.show-password-toggle { display: none !important; }
+
+/* Show-password toggle — JS-injected div, uses #dpl-spwd so global checkbox rules don't apply */
+.dpl-show-pwd-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+.dpl-show-pwd-toggle input[type="checkbox"] {
+  visibility: visible !important;
+  position: static !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+  accent-color: var(--crimson);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.dpl-show-pwd-toggle label {
+  position: static !important;
+  margin: 0 !important;
   font-size: 0.78rem;
-  margin-top: 10px;
   color: var(--text-muted);
+  cursor: pointer;
+}
+.dpl-show-pwd-toggle label::before {
+  display: none !important;
 }
 #OpacLoginInstructions {
   margin-top: 18px;

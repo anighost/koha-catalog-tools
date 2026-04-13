@@ -31,6 +31,23 @@ $(function () {
     $overlay.find('.dpl-login-card').append($login.detach());
     $('body').append($overlay);
 
+    // Fix show-password: Koha uses class "show-password-toggle", not id="show_password"
+    var $nativeToggle = $('.show-password-toggle');
+    var $pwdField     = $('#password');
+    if ($nativeToggle.length && $pwdField.length) {
+      $nativeToggle.hide();
+      var $nativeCb = $nativeToggle.find('input[type="checkbox"]');
+      var $toggle = $('<div class="dpl-show-pwd-toggle">' +
+        '<input type="checkbox" id="dpl-spwd">' +
+        '<label for="dpl-spwd">Show password</label>' +
+      '</div>');
+      $pwdField.after($toggle);
+      $('#dpl-spwd').on('change', function () {
+        $pwdField.attr('type', this.checked ? 'text' : 'password');
+        $nativeCb.prop('checked', this.checked);
+      });
+    }
+
     function openModal() {
       $overlay.addClass('is-open');
       $('body').css('overflow', 'hidden');
@@ -58,6 +75,12 @@ $(function () {
     // Close: ESC key
     $(document).on('keydown', function (e) {
       if (e.key === 'Escape') closeModal();
+    });
+
+    // Intercept Koha's Bootstrap #loginModal — redirect to custom overlay
+    $('#loginModal').on('show.bs.modal', function (e) {
+      e.preventDefault();
+      openModal();
     });
   }
 });
