@@ -122,4 +122,4 @@ SELECT COUNT(*) AS bibliographic_records FROM biblio;
 SELECT COUNT(*) AS items FROM items;
 
 
-gemini api key AIzaSyAic5ZcoQmmph6VRBkycwQGxHalQQ7V8Rk
+gemini api key ******
