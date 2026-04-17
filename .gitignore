@@ -4,6 +4,14 @@
 *.mrc
 *.mrk
 
+# SQLite runtime databases (seeded on server from Koha MySQL — not for version control)
+*.db
+
+# Runtime directories — uploads, generated outputs, user sessions
+catalog-app/uploads/
+catalog-app/output/
+catalog-app/sessions/
+
 # Python cache
 __pycache__/
 .ipynb_checkpoints/
