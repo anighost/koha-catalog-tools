@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working Instructions
+
+- **Read before acting.** Always read the relevant source files and trace the actual code flow before proposing or making changes. Do not assume how something works from file names or prior context alone — the implementation may have changed.
+- **Ask when uncertain.** If the intent behind a request is unclear, or if two reasonable interpretations exist, ask a clarifying question before writing any code. A wrong assumption wastes more time than a short question.
+- **Trace the full flow.** For bugs or feature additions, follow the data from entry point to output (e.g. form submit → route → engine → DB → template) before identifying where to intervene. Changes made at the wrong layer often introduce new bugs.
+- **Reference the functional spec.** `docs/catalog-app-functional-spec.md` documents the catalog app architecture, data model, dedup algorithm, processing pipeline, and design decisions. Read it before working on `catalog-app/`.
+
 ## What This Tool Does
 
 `clean_catalog.py` is a single-script tool that converts a messy library catalog spreadsheet (CSV/XLSX) into:

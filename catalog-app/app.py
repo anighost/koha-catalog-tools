@@ -65,6 +65,15 @@ if not _secret:
     )
 app.secret_key = _secret
 app.permanent_session_lifetime = timedelta(hours=4)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024   # 10 MB hard limit (S1)
+
+MAX_UPLOAD_ROWS = 500   # P2: reject files with more rows than this
+
+
+@app.errorhandler(413)
+def request_entity_too_large(_):
+    flash('File too large — maximum upload size is 10 MB.')
+    return redirect(url_for('index'))
 
 
 # ── Database ───────────────────────────────────────────────────────────────
@@ -99,6 +108,14 @@ def init_db():
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_barcode '
             'ON books(barcode)'
         )
+        # S2: persist login lockout state across restarts
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                ip    TEXT PRIMARY KEY,
+                count INTEGER DEFAULT 1,
+                since REAL NOT NULL
+            )
+        ''')
 
 init_db()
 
@@ -125,17 +142,41 @@ def normalize_author(text: str) -> str:
 
 
 def clean_isbn(isbn: str) -> str:
-    """Normalize an ISBN cell value.
-    - Strips Excel float artifact: '8170669677.0' → '8170669677'
-    - Any non-numeric string (Na, N/A, n.a., none, -, not available, …)
-      becomes '' because valid ISBNs contain only digits and X.
+    """
+    Normalize an ISBN to its ISBN-13 form, mirroring clean_catalog.py.
+
+    Steps:
+      1. Strip Excel float artifact: '8170669677.0' → '8170669677'
+      2. Strip any 'ISBN' prefix text and non-digit/X characters
+      3. ISBN-10 → ISBN-13: prepend '978', recalculate check digit
+      4. ISBN-13: return as-is
+      5. Anything else (Na, N/A, blank, unknown length): return ''
+
+    This ensures registry lookups match regardless of whether Gronthee
+    exported ISBN-10 or ISBN-13 for the same book.
     """
     s = (isbn or '').strip()
     # Remove trailing .0 / .00 from Excel float conversion
     s = re.sub(r'\.0+$', '', s)
-    # Keep only digits and X — everything else (including all NA variants) becomes ''
+    # Strip 'ISBN' prefix (case-insensitive) and keep only digits + X
+    s = re.sub(r'(?i)isbn', '', s)
     s = re.sub(r'[^\dXx]', '', s).upper()
-    return s
+
+    if len(s) == 13 and s.isdigit():
+        return s
+
+    if len(s) == 10:
+        # Convert ISBN-10 → ISBN-13 (978 prefix, new check digit)
+        isbn12 = '978' + s[:9]
+        try:
+            total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(isbn12))
+            check = (10 - (total % 10)) % 10
+            return isbn12 + str(check)
+        except ValueError:
+            # Non-numeric digit (e.g. X in positions 0–8) — return stripped form
+            return s
+
+    return s  # unknown length — return stripped, let lookup decide
 
 
 def next_copy_action(copies: int) -> str:
@@ -151,10 +192,16 @@ def next_copy_action(copies: int) -> str:
 
 
 def clean_year(year: str) -> str:
-    """Strip Excel float artifact ('1907.0' → '1907')."""
-    s = (year or '').strip()
-    s = re.sub(r'\.0+$', '', s)
-    return s
+    """
+    Mirror clean_catalog.py: extract first 4-digit year, validate 1800–current year.
+    '1993 (reprint)' → '1993'
+    '9999' → ''  (out of range)
+    '1993.0' → '1993'
+    """
+    s = re.sub(r'[^\d]', '', (year or '').strip())[:4]
+    if s.isdigit() and 1800 <= int(s) <= datetime.now().year:
+        return s
+    return ''
 
 
 # English volume markers — run on normalize(title) where Bengali marks are stripped.
@@ -256,9 +303,20 @@ def lookup_dup(isbn: str, title: str, author: str) -> dict | None:
         TITLE_THRESHOLD  = 80   # title similarity %
         AUTHOR_THRESHOLD = 72   # author similarity % (lower: romanization varies more)
 
-        candidates = conn.execute(
-            'SELECT barcode, title_norm, author_norm, title_display, copies FROM books'
-        ).fetchall()
+        # P1: Pre-filter candidates using the longest title word (> 3 chars) as a
+        # LIKE anchor before running rapidfuzz. For an 80%+ similar title the longest
+        # word almost certainly appears in both. Reduces O(N) scan to a small subset.
+        sig_words = sorted([w for w in nt.split() if len(w) > 3], key=len, reverse=True)
+        if sig_words:
+            candidates = conn.execute(
+                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books '
+                'WHERE title_norm LIKE ?',
+                (f'%{sig_words[0]}%',)
+            ).fetchall()
+        else:
+            candidates = conn.execute(
+                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books'
+            ).fetchall()
 
         best_score, best_row = 0.0, None
         for cand in candidates:
@@ -362,15 +420,21 @@ def prenormalize_author(raw: str, meta: dict) -> str:
     "Ashapurna Devi"    → "Devi, Ashapurna"
     "sunil ganguly"     → "Gangopadhyay, Sunil"  (via synonyms_author)
     Already-inverted names ("Devi, Ashapurna") are left unchanged.
+
+    Mirrors clean_catalog.py match_author_synonym(): exact all-words match first,
+    then rapidfuzz token_sort_ratio fallback at fuzzy_author_threshold (default 88).
     """
     raw = raw.strip()
     if not raw:
         return raw
 
-    # Synonym match (all-words, case-insensitive) — same as clean_catalog.py
+    synonyms_author = meta.get('synonyms_author', {})
+    fuzzy_threshold = meta.get('fuzzy_author_threshold', 88)
+
+    # Stage 1: exact all-words match (case-insensitive) — fast path
     raw_lower = raw.lower()
     matched = raw
-    for standard, variations in meta.get('synonyms_author', {}).items():
+    for standard, variations in synonyms_author.items():
         for v in variations:
             if all(w in raw_lower for w in v.lower().split()):
                 matched = standard
@@ -378,6 +442,25 @@ def prenormalize_author(raw: str, meta: dict) -> str:
         else:
             continue
         break
+
+    # Stage 2: rapidfuzz fallback — catches single-character typos exact match misses
+    if matched == raw:
+        try:
+            from rapidfuzz import fuzz as _rf_fuzz, process as _rf_process
+            candidates = {}
+            for standard, variations in synonyms_author.items():
+                for v in variations:
+                    candidates[v.lower()] = standard
+                candidates[standard.lower()] = standard
+            if candidates:
+                result = _rf_process.extractOne(
+                    raw_lower, list(candidates.keys()),
+                    scorer=_rf_fuzz.token_sort_ratio
+                )
+                if result and result[1] >= fuzzy_threshold:
+                    matched = candidates[result[0]]
+        except ImportError:
+            pass
 
     # Inversion: skip if already comma-separated or multi-author
     if ',' in matched:
@@ -445,6 +528,19 @@ def prenormalize_series(raw: str, author_pre_invert: str, meta: dict) -> str:
     normalized = prenormalize_title(raw, meta)
     key = f"{normalized}|{author_pre_invert}"
     return meta.get('series_overrides', {}).get(key, normalized)
+
+
+def _first_author_for_dedup(raw: str, meta: dict) -> str:
+    """
+    Extract the first author from a potentially multi-author string and prenormalize it.
+    Mirrors clean_catalog.py: "Sunil Ganguly and Tapas Biswas" → prenormalize "Sunil Ganguly".
+
+    The full raw string is kept in cols[] for MARC generation; this function is only
+    used to produce the lookup key for dedup registry queries.
+    """
+    # Split on "and" / "&" the same way clean_catalog.py does
+    first = re.split(r'\s+and\s+|\s*&\s*', raw, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    return prenormalize_author(first, meta)
 
 
 def load_session(sid: str) -> dict | None:
@@ -562,7 +658,11 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
             if ci < len(cols) and cols[ci]:
                 cols[ci] = prenormalize_author(cols[ci], meta)
 
-        dup = lookup_dup(isbn, title, author)
+        # For dedup lookup: use first author only (mirrors clean_catalog.py which stores
+        # only the primary author in the registry). The full author string in cols is
+        # preserved so clean_catalog.py can still split "A and B" → 100$a + 700$a.
+        author_for_dedup = _first_author_for_dedup(raw_author_pre_invert, meta)
+        dup = lookup_dup(isbn, title, author_for_dedup)
         fuzzy_score = None   # initialise so every branch can safely reference it
         if not title and not author:
             status      = 'ERROR'
@@ -648,30 +748,43 @@ def _validate_csrf():
 app.jinja_env.globals['csrf_token'] = _get_csrf_token
 
 
-# ── Login rate limiting ────────────────────────────────────────────────────
-_login_failures: dict = {}   # ip -> [count, first_failure_timestamp]
+# ── Login rate limiting (S2: DB-backed — survives restarts) ───────────────
 _MAX_FAILURES    = 5
 _LOCKOUT_SECONDS = 900        # 15 minutes
 
 def _is_rate_limited(ip: str) -> bool:
-    entry = _login_failures.get(ip)
-    if not entry:
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        row = conn.execute(
+            'SELECT count, since FROM login_attempts WHERE ip=?', (ip,)
+        ).fetchone()
+    if not row:
         return False
-    count, since = entry
+    count, since = row
     if time.time() - since > _LOCKOUT_SECONDS:
-        del _login_failures[ip]
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute('DELETE FROM login_attempts WHERE ip=?', (ip,))
         return False
     return count >= _MAX_FAILURES
 
 def _record_login_failure(ip: str):
-    entry = _login_failures.get(ip)
-    if entry and time.time() - entry[1] <= _LOCKOUT_SECONDS:
-        entry[0] += 1
-    else:
-        _login_failures[ip] = [1, time.time()]
+    now = time.time()
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        row = conn.execute(
+            'SELECT count, since FROM login_attempts WHERE ip=?', (ip,)
+        ).fetchone()
+        if row and now - row[1] <= _LOCKOUT_SECONDS:
+            conn.execute(
+                'UPDATE login_attempts SET count=count+1 WHERE ip=?', (ip,)
+            )
+        else:
+            conn.execute(
+                'INSERT OR REPLACE INTO login_attempts (ip, count, since) VALUES (?,?,?)',
+                (ip, 1, now)
+            )
 
 def _clear_login_failures(ip: str):
-    _login_failures.pop(ip, None)
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute('DELETE FROM login_attempts WHERE ip=?', (ip,))
 
 
 # ── Disk cleanup ───────────────────────────────────────────────────────────
@@ -783,6 +896,14 @@ def upload():
         flash('File appears to be empty or has no data rows.')
         return redirect(url_for('index'))
 
+    if len(raw_rows) > MAX_UPLOAD_ROWS:
+        flash(
+            f'File has {len(raw_rows)} rows — maximum allowed is {MAX_UPLOAD_ROWS}. '
+            f'Split the file into smaller batches and upload separately.'
+        )
+        Path(save_path).unlink(missing_ok=True)
+        return redirect(url_for('index'))
+
     rows = build_review_rows(raw_rows, f.filename)
     save_session(sid, {
         'filename':    f.filename,
@@ -809,10 +930,20 @@ def review(sid):
 @app.route('/api/dedup')
 @login_required
 def api_dedup():
-    """AJAX endpoint: check a single title/author/isbn against the registry."""
-    isbn   = request.args.get('isbn', '')
+    """AJAX endpoint: check a single title/author/isbn against the registry.
+
+    Applies the same pre-normalization as build_review_rows() so that synonym
+    substitutions and author inversion are consistent between initial load and
+    live AJAX re-checks triggered by user edits.
+    """
+    isbn   = clean_isbn(request.args.get('isbn', ''))
     title  = request.args.get('title', '')
     author = request.args.get('author', '')
+    meta   = load_meta()
+    # Mirror build_review_rows(): normalize title and author before lookup
+    title  = prenormalize_title(title, meta)
+    # For multi-author strings, extract first author for dedup (same as clean_catalog.py)
+    author = _first_author_for_dedup(author, meta)
     dup = lookup_dup(isbn, title, author)
     if dup and not dup['fuzzy']:
         return jsonify(status='DUPLICATE',
@@ -927,6 +1058,9 @@ def process(sid):
             'date':        cols[COL_DATE],
             'dup_barcode': dup_bc,
         }
+
+        if request.form.get(f'deleted_{i}') == '1':
+            continue  # user excluded this row
 
         if status == 'ERROR':
             continue  # blocked by front-end, but skip defensively
@@ -1075,10 +1209,12 @@ def process(sid):
         'already_in_registry': skipped_reg,
         'copies_added':  copy_count,
         'skipped':       sum(1 for i in range(row_count)
-                             if request.form.get(f'status_{i}') in ('DUPLICATE', 'FUZZY')
+                             if not request.form.get(f'deleted_{i}')
+                             and request.form.get(f'status_{i}') in ('DUPLICATE', 'FUZZY')
                              and request.form.get(f'action_{i}', 'skip') == 'skip'),
         'errors':        sum(1 for i in range(row_count)
-                             if request.form.get(f'status_{i}') == 'ERROR'),
+                             if not request.form.get(f'deleted_{i}')
+                             and request.form.get(f'status_{i}') == 'ERROR'),
         'mrc_path':      mrc_out_path,
         'audit_path':    audit_path,
         'errors_path':   errors_path,

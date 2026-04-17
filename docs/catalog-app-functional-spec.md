@@ -63,7 +63,7 @@ The catalog app provides: **upload → OCR-error review → duplicate detection 
 ### 3.1 Login (`GET/POST /login`)
 
 - Single shared password for all volunteers (set via `CATALOG_PASSWORD` env var, default `changeme`)
-- Rate-limited: 5 failures per IP → 15-minute lockout (`_login_failures` in-memory dict)
+- Rate-limited: 5 failures per IP → 15-minute lockout; state persisted in `login_attempts` SQLite table — survives server restarts
 - On success: `session['auth'] = True`, `session.permanent = True` (4-hour cookie lifetime)
 - CSRF token validated on POST
 - Redirects to `?next=` URL if the user was bounced here mid-session
@@ -71,12 +71,14 @@ The catalog app provides: **upload → OCR-error review → duplicate detection 
 ### 3.2 Upload (`GET /` · `POST /upload`)
 
 - Drag-and-drop file zone; accepts `.xlsx`, `.xls`, `.csv`; client-side validates extension
+- **Server-side limits**: 10 MB max file size (`MAX_CONTENT_LENGTH`; Flask rejects at the WSGI layer before any disk/memory allocation — returns a clean flash message via 413 handler); 500-row maximum per file (rows beyond this are rejected with a "split into batches" message)
 - On POST:
   1. Saves file to `uploads/<sid><ext>`
   2. Calls `parse_upload()` → list of 40-column rows (header row skipped, blank rows dropped)
-  3. Calls `build_review_rows()` → pre-normalizes + dedup check on every row
-  4. Saves full state to `sessions/<sid>.json`
-  5. Redirects to `/review/<sid>`
+  3. Enforces row count limit; deletes file and flashes error if exceeded
+  4. Calls `build_review_rows()` → pre-normalizes + dedup check on every row
+  5. Saves full state to `sessions/<sid>.json`
+  6. Redirects to `/review/<sid>`
 - Opportunistically runs `_cleanup_old_files()` (at most once per 24h)
 
 ### 3.3 Review (`GET /review/<sid>`)
@@ -125,9 +127,18 @@ The main UX screen. A server-rendered editable table — one row per book.
 - Search input above the table filters visible rows by title, author, or ISBN in real-time
 - Shows "N of M rows" count when a query is active
 
+**Exclude row:**
+- Every row has a subtle "✕ exclude row" link below the status badge
+- Clicking it: grays the row (opacity 0.3), disables all inputs, sets `deleted_{i}='1'` hidden input, shows "↺ restore" link
+- Excluded rows are skipped by `updateSummary()` (don't block Process) and by `process()` server-side (don't count in any result stat)
+
 **Bottom bar:**
 - Summary counts: `3 new · 1 duplicate · 2 possible matches · 1 error`
 - "Process & Import to Koha" button — disabled if any ERROR rows remain OR any FUZZY rows have unresolved `— Select action —`
+- Clicking the button opens a **confirmation modal** showing: N new books · M copy additions · K duplicates to skip · P excluded rows. User must click "Confirm & Import" to actually submit. If nothing would be imported (all skipped/excluded), a warning is shown in the modal.
+
+**bfcache / back-button safety:**
+- A `pageshow` listener hides the processing overlay if the browser restores the review page from the bfcache (back-button navigation). Without this, the spinner would be frozen on screen.
 
 **Session expiry protection:**
 - JS pings `GET /heartbeat` every 5 minutes to keep the auth cookie alive
@@ -162,7 +173,7 @@ Shows a summary card with counters:
 
 ### 4.1 SQLite — `dedup_registry.db`
 
-Single table `books`:
+Two tables. `books` is the dedup registry; `login_attempts` persists rate-limit state.
 
 ```sql
 CREATE TABLE books (
@@ -182,12 +193,20 @@ CREATE TABLE books (
 
 CREATE UNIQUE INDEX idx_dedup   ON books(title_norm, author_norm);
 CREATE UNIQUE INDEX idx_barcode ON books(barcode);
+
+-- Login rate-limit state (persisted across restarts)
+CREATE TABLE login_attempts (
+    ip    TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 1,
+    since REAL NOT NULL        -- Unix timestamp of first failure in current window
+);
 ```
 
 **Key constraints:**
 - `idx_dedup` prevents the same logical book from being registered twice
 - `idx_barcode` prevents duplicate barcodes (defense against race conditions)
 - `INSERT OR IGNORE` is used on insert; if skipped, a barcode-mismatch check warns if the stored barcode differs from the new one
+- `login_attempts` rows expire naturally: any row whose `since` is older than 15 minutes is treated as cleared and deleted on next check
 
 ### 4.2 File-based sessions — `sessions/<sid>.json`
 
@@ -230,34 +249,50 @@ Before any dedup check, each uploaded row is run through the same synonym/normal
 ```
 Raw XLSX row (40 columns)
         │
-        ├── clean_isbn()        strip .0 float artifact, keep digits+X only
-        ├── clean_year()        strip .0 float artifact
+        ├── clean_isbn()
+        │       strip .0 float artifact; strip ISBN prefix/hyphens; keep digits+X
+        │       ISBN-10 → ISBN-13: prepend 978, recalculate check digit
+        │
+        ├── clean_year()
+        │       strip all non-digits, take first 4 digits
+        │       validate range 1800 ≤ year ≤ current year → '' if invalid
+        │       (mirrors clean_catalog.py exactly; "1993 (reprint)" → "1993")
         │
         ├── prenormalize_author()
-        │       └── synonyms_author lookup (all-words match, case-insensitive)
-        │       └── name inversion: "Firstname Lastname" → "Lastname, Firstname"
+        │       Stage 1: synonyms_author exact all-words match (case-insensitive)
+        │       Stage 2: rapidfuzz token_sort_ratio fallback at fuzzy_author_threshold
+        │                (default 88) — catches single-character typos Stage 1 misses
+        │       → name inversion: "Firstname Lastname" → "Lastname, Firstname"
+        │       → multi-author "A and B": returned unchanged (clean_catalog.py splits it)
         │
         ├── prenormalize_title()
-        │       └── synonyms_keywords regex substitution (word-boundary)
+        │       synonyms_keywords regex substitution (word-boundary)
         │
         ├── prenormalize_publisher()
-        │       └── synonyms_publisher substring match
+        │       synonyms_publisher word-boundary match
         │
         ├── prenormalize_place()
-        │       └── synonyms_place exact match
+        │       synonyms_place exact match
         │
         ├── prenormalize_series()
-        │       └── synonyms_keywords + series_overrides["SeriesTitle|AuthorPreInvert"]
+        │       synonyms_keywords + series_overrides["SeriesTitle|AuthorPreInvert"]
         │
         ├── prenormalize_subject() × 5 (cols 14–18)
-        │       └── synonyms_subject word-boundary match
+        │       synonyms_subject word-boundary match
         │
         └── prenormalize_author() × 6 (added authors, cols 19–24)
 
-        → lookup_dup(isbn, title, author)  → status + dup info
+        → _first_author_for_dedup(raw_author_pre_invert, meta)
+        │       Splits "A and B" → takes first author only → prenormalize_author()
+        │       Mirrors clean_catalog.py: registry stores only the primary author (100$a)
+        │       Full author string is preserved in cols[] for MARC generation
+        │
+        → lookup_dup(isbn, title, author_for_dedup)  → status + dup info
 ```
 
 All synonym dictionaries are loaded from `koha_session_meta.json` at the start of each `build_review_rows()` call.
+
+**Live AJAX dedup re-check (`GET /api/dedup`)** applies the same normalization pipeline — `clean_isbn()`, `prenormalize_title()`, `_first_author_for_dedup()` — before calling `lookup_dup()`. This ensures live edits by the user produce consistent dedup results with the initial load.
 
 ---
 
@@ -269,7 +304,14 @@ Three-stage lookup, stopping at the first match:
 ```python
 SELECT * FROM books WHERE isbn = clean_isbn(isbn)
 ```
-Most reliable. ISBNs are cleaned to digits+X only, stripping float artifacts and "Na"/"N/A" variants. Returns `fuzzy=False`.
+Most reliable. `clean_isbn()` mirrors `clean_catalog.py`'s `clean_and_convert_isbn()`:
+- Strips `.0` Excel float artifacts (`8170669677.0` → `8170669677`)
+- Strips `ISBN` prefix text and non-digit/X characters (handles hyphens, spaces)
+- **Converts ISBN-10 → ISBN-13**: prepends `978`, recalculates check digit (`8170669677` → `9788170669677`)
+- ISBN-13: returned as-is
+- Anything else (Na, N/A, blank, unknown length): returns `''` (skips ISBN lookup)
+
+The registry always stores ISBN-13 (written by `clean_catalog.py` before the audit XLSX is generated). Using the same conversion in `clean_isbn()` ensures a Gronthee export with ISBN-10 matches the registry entry for the same book. Returns `fuzzy=False`.
 
 ### Stage 2 — Normalized Title + Author Exact Match
 ```python
@@ -286,8 +328,17 @@ Both map to the same `author_norm` key. Returns `fuzzy=False`.
 ### Stage 3 — Fuzzy Match (rapidfuzz)
 Only reached if stages 1 and 2 find no match.
 
+**Pre-filter (P1 optimization):** Before running rapidfuzz, the longest title word (> 3 chars) is used as a `LIKE` anchor to reduce candidates from the full registry to a small subset. For an 80%+ similar title, the longest word almost certainly appears in both. A 5,000-book registry is reduced to < 20 candidates in typical cases.
+
 ```python
-for each candidate in books:
+# Pre-filter: longest word in title_norm (most unique token)
+sig_words = sorted([w for w in nt.split() if len(w) > 3], key=len, reverse=True)
+if sig_words:
+    candidates = SELECT ... FROM books WHERE title_norm LIKE '%<sig_words[0]>%'
+else:
+    candidates = SELECT ... FROM books   # fallback: full scan for short titles
+
+for each candidate in candidates:
     # Hard block: different volumes are different books
     if _volumes_conflict(title, candidate.title_display):
         continue
@@ -322,8 +373,10 @@ Form submitted (row_count, per-row: status, action, title, author, isbn, year, p
         ├── For each row i in 0..row_count:
         │       status = status_i (NEW | DUPLICATE | FUZZY | FUZZY_NEW | ERROR)
         │       action = action_i (skip | copy2 | copy3 | copy4 | new | review)
+        │       deleted_i = '1' if row was excluded by user
         │       Apply user edits: cols[ISBN/AUTHOR/TITLE/YEAR/PUBLISHER] = form values
         │
+        │       deleted='1' → skip (excluded rows counted nowhere in result)
         │       ERROR  → skip
         │       NEW or FUZZY_NEW → new_rows[]
         │       DUPLICATE/FUZZY + action=copy2/3/4 → copy_rows[]
@@ -436,10 +489,12 @@ The patched script is written to `<tempdir>/_run.py` and executed as a subproces
 | Authentication | Single shared password, checked on every route via `@login_required` decorator |
 | Session signing | Flask signed cookie (`FLASK_SECRET_KEY`); random 32-byte key generated at startup if not set (warns to log) |
 | CSRF | Per-session `secrets.token_hex(16)` token; validated on all POST routes; available in templates as `csrf_token()` |
-| Login rate limiting | 5 failures per IP → 15-min lockout; in-memory dict (resets on server restart) |
+| Login rate limiting | 5 failures per IP → 15-min lockout; persisted in `login_attempts` SQLite table — survives server restarts |
 | Session lifetime | 4-hour permanent cookie; `/heartbeat` endpoint extends it from the review page |
 | Shell injection | `shlex.quote()` applied to all shell arguments; `koha-shell` invoked via list (no `shell=True`) |
+| File size limit | `MAX_CONTENT_LENGTH = 10 MB` enforced at WSGI layer; clean 413 handler returns flash message |
 | File type validation | Extension check + openpyxl/csv parsing (any parse failure → flash error, no crash) |
+| Row count limit | 500 rows max per upload; rejected server-side before `build_review_rows()` runs |
 
 ---
 
@@ -500,3 +555,10 @@ rapidfuzz      Fuzzy string matching for dedup stage 3
 | No async/SSE for processing | App is internal, low-concurrency. A spinner overlay is sufficient UX. Adding SSE/WebSockets would require architectural changes not warranted by usage volume. |
 | Max 4 copies per book | Barcode scheme supports prefixes 10–13 only. Beyond 4 physical copies, the workflow requires manual Koha intervention. |
 | Fuzzy match forced to `— Select action —` | FUZZY rows represent uncertain matches (e.g. OCR variants of the same title). Pre-selecting Skip was risky — a real duplicate could slip through as a new book. Forcing an explicit choice makes the review meaningful. |
+| `clean_year()` strips all non-digits and validates range | Mirrors `clean_catalog.py` exactly — "1993 (reprint)" → "1993", "9999" → "". Without this, the review screen could display a year that clean_catalog.py would silently blank in the MARC output. |
+| `prenormalize_author()` fuzzy stage 2 | `clean_catalog.py` uses rapidfuzz for author synonym matching (threshold 88). Without the same fallback in `app.py`, single-character OCR typos in author names would escape synonym normalization, causing false NEW status for known books. |
+| `_first_author_for_dedup()` splits multi-author field | The registry stores only the primary author (100$a from `clean_catalog.py`). Comparing "A and B" against "A" would never match at Stage 2. The helper extracts only the first author for dedup purposes while preserving the full string in `cols[]` for MARC generation. |
+| Login failures in SQLite not memory | An in-memory dict resets on every server restart, allowing burst brute-force across restarts. Persisting to SQLite means the lockout window is respected even after a crash or deploy. |
+| 500-row upload cap | Beyond ~500 rows the review table becomes difficult to navigate. Gronthee batches should naturally be smaller (single scanning session). Larger files should be split upstream. |
+| LIKE pre-filter before rapidfuzz (Stage 3) | Full table scan × every uploaded row is O(N×M). The longest significant word (> 3 chars) is a highly selective filter; for 80%+ similar titles it almost always appears in both. Reduces 5,000-candidate scans to < 20 in typical cases. |
+| Confirm modal before process | One-click import with no summary is risky at scale — a misclick could import hundreds of books with wrong data. The modal gives volunteers a final checkpoint showing exact counts. |

@@ -130,6 +130,11 @@
                     onclick="showCopyOverride(this.closest('tr'))">&#43; add as copy</span>
             </div>
             {% endif %}
+            <div class="exclude-row-ctrl" style="margin-top:5px">
+              <span class="exclude-link"
+                    style="font-size:0.6rem;color:#bbb;cursor:pointer;text-decoration:underline dotted"
+                    onclick="excludeRow(this.closest('tr'))">&#10005; exclude row</span>
+            </div>
           </td>
 
           <!-- Title -->
@@ -209,6 +214,7 @@
           <!-- Hidden state -->
           <input type="hidden" name="status_{{ i }}"      class="status-hidden"     value="{{ row.status }}">
           <input type="hidden" name="dup_barcode_{{ i }}" class="dup-barcode-hidden" value="{{ row.dup_barcode or '' }}">
+          <input type="hidden" name="deleted_{{ i }}"     class="deleted-hidden"     value="">
           {% set col_skip = [0, 2, 3, 8, 9] %}
           {% for ci in range(40) %}
             {% if ci not in col_skip %}
@@ -227,11 +233,45 @@
         &#9888; Rows marked ERROR must have a title and author before processing.
       </div>
       <div id="summary-bar" class="small text-muted"></div>
-      <button type="submit" class="btn btn-crimson" id="process-btn">
+      <button type="button" class="btn btn-crimson" id="process-btn"
+              onclick="showConfirmModal()">
         Process &amp; Import to Koha &rarr;
       </button>
     </div>
   </form>
+</div>
+
+<!-- U1: Confirm-before-process modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+    <div class="modal-content" style="border-radius:12px;border:1px solid #f0dede;font-family:'Poppins',sans-serif">
+      <div class="modal-header" style="border-bottom:1px solid #f0dede;padding:16px 20px 12px">
+        <h6 class="modal-title" style="font-size:0.88rem;font-weight:700;color:var(--text);letter-spacing:0.01em">
+          Confirm Import
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" style="width:0.8rem;height:0.8rem"></button>
+      </div>
+      <div class="modal-body" style="padding:18px 20px 16px">
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:14px">
+          You are about to process the following:
+        </p>
+        <div id="confirm-summary"
+             style="background:#f9f4f4;border:1px solid #f0dede;border-radius:8px;
+                    padding:12px 16px;font-size:0.82rem;line-height:2"></div>
+        <p id="confirm-warn" class="mb-0 mt-3"
+           style="display:none;font-size:0.78rem;color:#7a3a00;
+                  background:#fff5ee;border:1px solid #f0c890;border-radius:6px;padding:8px 12px">
+        </p>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid #f0dede;padding:12px 20px;gap:8px">
+        <button type="button" class="btn btn-dfl btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-crimson btn-sm" id="confirm-submit-btn"
+                onclick="document.getElementById('review-form').submit()">
+          Confirm &amp; Import &rarr;
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Processing overlay (shown on form submit) -->
@@ -366,6 +406,9 @@
   function updateSummary() {
     var c = {NEW:0, DUPLICATE:0, FUZZY:0, ERROR:0};
     document.querySelectorAll('tr[data-status]').forEach(function(tr){
+      // Skip excluded rows — they don't contribute to any count
+      var delH = tr.querySelector('.deleted-hidden');
+      if (delH && delH.value === '1') return;
       var s = tr.dataset.status; if(c[s]!==undefined) c[s]++;
     });
     var parts = [];
@@ -380,8 +423,11 @@
 
     var hasErr = c.ERROR > 0;
     var hasUnresolved = false;
-    document.querySelectorAll('tr[data-status="FUZZY"] .action-select').forEach(function(sel) {
-      if (sel.value === 'review') hasUnresolved = true;
+    document.querySelectorAll('tr[data-status="FUZZY"]').forEach(function(tr) {
+      var delH = tr.querySelector('.deleted-hidden');
+      if (delH && delH.value === '1') return;
+      var sel = tr.querySelector('.action-select');
+      if (sel && sel.value === 'review') hasUnresolved = true;
     });
 
     document.getElementById('process-btn').disabled = hasErr || hasUnresolved;
@@ -589,6 +635,13 @@
     overlay.style.display = 'flex';
   });
 
+  // U2: Hide overlay if browser restores page from bfcache (back button)
+  window.addEventListener('pageshow', function(e) {
+    if (e.persisted) {
+      document.getElementById('processing-overlay').style.display = 'none';
+    }
+  });
+
   // ── F3: Table filter ──────────────────────────────────────────────────
   var filterInput = document.getElementById('table-filter');
   var filterCount = document.getElementById('filter-count');
@@ -616,6 +669,74 @@
   setInterval(function() {
     fetch(HEARTBEAT_URL, {credentials: 'same-origin'}).catch(function(){});
   }, 5 * 60 * 1000);
+
+  // ── U3: Exclude / restore row ─────────────────────────────────────────
+  window.excludeRow = function(tr) {
+    tr.querySelector('.deleted-hidden').value = '1';
+    tr.style.opacity = '0.3';
+    tr.querySelectorAll('input:not([type=hidden]),select').forEach(function(el) {
+      el.disabled = true;
+    });
+    // Replace "exclude row" link with "restore" link
+    var ctrl = tr.querySelector('.exclude-row-ctrl');
+    if (ctrl) {
+      ctrl.innerHTML = '<span style="font-size:0.6rem;color:#e07b39;cursor:pointer;text-decoration:underline dotted" '
+        + 'onclick="restoreRow(this.closest(\'tr\'))">&#8635; restore</span>';
+    }
+    updateSummary();
+  };
+
+  window.restoreRow = function(tr) {
+    tr.querySelector('.deleted-hidden').value = '';
+    tr.style.opacity = '';
+    tr.querySelectorAll('input:not([type=hidden]),select').forEach(function(el) {
+      el.disabled = false;
+    });
+    var ctrl = tr.querySelector('.exclude-row-ctrl');
+    if (ctrl) {
+      ctrl.innerHTML = '<span class="exclude-link" style="font-size:0.6rem;color:#bbb;cursor:pointer;text-decoration:underline dotted" '
+        + 'onclick="excludeRow(this.closest(\'tr\'))">&#10005; exclude row</span>';
+    }
+    updateSummary();
+  };
+
+  // ── U1: Confirm-before-process modal ─────────────────────────────────
+  window.showConfirmModal = function() {
+    var c = {NEW:0, DUPLICATE:0, FUZZY:0, ERROR:0, copy2:0, copy3:0, copy4:0};
+    var skipCount = 0;
+    document.querySelectorAll('tr[data-idx]').forEach(function(tr) {
+      if (tr.querySelector('.deleted-hidden') && tr.querySelector('.deleted-hidden').value === '1') return;
+      var s   = tr.querySelector('.status-hidden').value;
+      var act = (tr.querySelector('.action-select') || {value:'skip'}).value;
+      if (s === 'NEW' || s === 'FUZZY_NEW') { c.NEW++; return; }
+      if (s === 'ERROR') { c.ERROR++; return; }
+      if (s === 'DUPLICATE' || s === 'FUZZY') {
+        if (act === 'copy2') c.copy2++;
+        else if (act === 'copy3') c.copy3++;
+        else if (act === 'copy4') c.copy4++;
+        else skipCount++;
+      }
+    });
+    var copyTotal = c.copy2 + c.copy3 + c.copy4;
+    var lines = [];
+    if (c.NEW)      lines.push('<span style="color:#2e7d6b;font-weight:600">' + c.NEW + '</span> new book' + (c.NEW>1?'s':'') + ' to import');
+    if (copyTotal)  lines.push('<span style="color:#1a6b7a;font-weight:600">' + copyTotal + '</span> copy addition' + (copyTotal>1?'s':''));
+    if (skipCount)  lines.push('<span style="color:var(--text-muted);font-weight:600">' + skipCount + '</span> duplicate' + (skipCount>1?'s':'')+' to skip');
+    var excl = document.querySelectorAll('tr[data-idx] .deleted-hidden[value="1"]').length;
+    if (excl)       lines.push('<span style="color:#bbb;font-weight:600">' + excl + '</span> row' + (excl>1?'s':'') + ' excluded');
+    if (!lines.length) lines.push('<span style="color:var(--text-muted)">Nothing to process</span>');
+    document.getElementById('confirm-summary').innerHTML = lines.join('<br>');
+
+    var warnEl = document.getElementById('confirm-warn');
+    if (c.NEW === 0 && copyTotal === 0) {
+      warnEl.textContent = 'No books will be imported — all rows are being skipped or excluded.';
+      warnEl.style.display = '';
+    } else {
+      warnEl.style.display = 'none';
+    }
+
+    bootstrap.Modal.getOrCreate(document.getElementById('confirmModal')).show();
+  };
 
   // Show a dismissible warning banner 20 minutes before session expires
   setTimeout(function() {
