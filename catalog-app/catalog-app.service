@@ -5,19 +5,20 @@ After=network.target
 [Service]
 User=dishari
 Group=dishari
-WorkingDirectory=/home/dishari/catalog-app
+WorkingDirectory=/home/dishari/koha-catalog-tools/catalog-app
 
 # Set these before enabling the service
 Environment="CATALOG_PASSWORD=changeme"
 Environment="FLASK_SECRET_KEY=change-this-to-a-random-string"
 Environment="KOHA_INSTANCE=dishari_lib"
+Environment="KOHA_MATCH_RULE=STRICT_CLE"
 
 # Point to clean_catalog.py and koha_session_meta.json on the server
 Environment="CATALOG_SCRIPT=/home/dishari/koha-catalog-tools/scripts/clean_catalog.py"
-Environment="CATALOG_META=/home/dishari/catalog-app/koha_session_meta.json"
+Environment="CATALOG_META=/home/dishari/koha-catalog-tools/catalog-app/koha_session_meta.json"
 
 # Single worker — REQUIRED for filelock barcode serialization
-ExecStart=/usr/bin/python3 -m gunicorn -w 1 -b 127.0.0.1:5050 app:app
+ExecStart=/home/dishari/.local/bin/gunicorn -w 1 -b 127.0.0.1:5050 app:app
 
 Restart=always
 RestartSec=5

@@ -5,9 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Working Instructions
 
 - **Read before acting.** Always read the relevant source files and trace the actual code flow before proposing or making changes. Do not assume how something works from file names or prior context alone — the implementation may have changed.
+- **Read for consistency.** Before making any change to `catalog-app/`, read the specific functions and templates you intend to modify. Check variable names, existing patterns, and how adjacent code handles similar cases — new code must be consistent with what is already there.
 - **Ask when uncertain.** If the intent behind a request is unclear, or if two reasonable interpretations exist, ask a clarifying question before writing any code. A wrong assumption wastes more time than a short question.
 - **Trace the full flow.** For bugs or feature additions, follow the data from entry point to output (e.g. form submit → route → engine → DB → template) before identifying where to intervene. Changes made at the wrong layer often introduce new bugs.
 - **Reference the functional spec.** `docs/catalog-app-functional-spec.md` documents the catalog app architecture, data model, dedup algorithm, processing pipeline, and design decisions. Read it before working on `catalog-app/`.
+- **Update the functional spec after changes.** After any change to `catalog-app/` that affects behaviour, data model, dedup logic, or UX — update `docs/catalog-app-functional-spec.md` to reflect the new state. The spec is the source of truth for future work; if it drifts from the code it becomes actively misleading.
 
 ## What This Tool Does
 
@@ -119,9 +121,9 @@ catalog-app/
 ### Key files
 
 **`app.py`** — all application logic:
-- `init_db()` — creates SQLite `books` table + `idx_dedup (title_norm, author_norm)` + `idx_barcode` unique indexes
-- `lookup_dup()` — 3-stage dedup: ISBN exact → title+author exact → rapidfuzz fuzzy (threshold 80%/72%)
-- `build_review_rows()` — parses upload, pre-normalises via `koha_session_meta.json` synonyms, runs dedup on every row
+- `init_db()` — creates SQLite `books` table + `idx_dedup (title_norm, author_norm, edition_norm)` + `idx_barcode` unique indexes
+- `lookup_dup()` — 3-stage dedup: ISBN exact → title+author+edition exact → rapidfuzz fuzzy (threshold 80%/72%), with hard-block on edition conflict
+- `build_review_rows()` — parses upload, pre-normalises via `koha_session_meta.json` synonyms, runs dedup on every row; also checks for within-upload cross-row duplicates (`seen_in_upload` dict, G3)
 - `register_books()` — inserts processed books; detects barcode mismatches on re-runs
 - `process()` route — splits rows into new/copy/skip, calls `catalog_engine.run()`, merges MARC, calls `import_to_koha()`
 - `import_to_koha()` — shells out to `sudo koha-shell <instance> -c bulkmarcimport.pl ...`
@@ -135,12 +137,15 @@ catalog-app/
 
 ### Dedup logic
 
-Three-stage lookup per uploaded row:
+Each uploaded row is checked in order:
+0. **Within-upload cross-row check** — `seen_in_upload` dict catches the same book appearing twice in the same file before it even hits the registry (G3)
 1. **ISBN exact match** — most reliable; bypasses title/author comparison
-2. **Normalized title + author exact match** — `normalize()` lowercases + strips punctuation; `normalize_author()` sorts words to handle name inversion
-3. **Fuzzy match** (rapidfuzz `token_sort_ratio`) — title ≥ 80%, author ≥ 72%, combined score weighted 65/35; skipped if Bengali/English volume markers differ (`খণ্ড 2` ≠ `খণ্ড 3`)
+2. **Normalized title + author + edition exact match** — `normalize()` lowercases + strips punctuation; `normalize_author()` sorts words to handle name inversion; `edition_norm=''` for books with no edition (G1)
+3. **Fuzzy match** (rapidfuzz `token_sort_ratio`) — title ≥ 80%, author ≥ 72%, combined score weighted 65/35; hard-blocks if volume markers differ OR both editions are known and differ (G1)
 
 Row statuses: `NEW` · `DUPLICATE` · `FUZZY` · `ERROR`
+
+DUPLICATE rows have a `dup_source` field: `'registry'` (matched an existing book) or `'upload'` (matched an earlier row in the same file). Same-file dups cannot be added as copies — Copy 2/3/4 options are hidden in the action dropdown.
 
 FUZZY rows **require an explicit action** — the dropdown defaults to `— Select action —` and blocks the Process button until resolved. Options: Skip / Add as Copy 2–4 / Import as new book.
 

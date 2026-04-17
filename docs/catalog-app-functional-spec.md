@@ -101,14 +101,21 @@ The main UX screen. A server-rendered editable table — one row per book.
 | Badge | Color | Meaning |
 |-------|-------|---------|
 | `NEW` | Green | Not in registry; will be imported as a new bib record |
-| `DUPLICATE` | Amber | Exact match (ISBN or title+author) in registry |
+| `DUPLICATE` | Amber | Exact match in registry (registry dup) **or** same book appeared in an earlier row of this file (same-file dup) |
 | `FUZZY` | Teal | Similar but not identical to an existing record; confidence score shown |
 | `ERROR` | Red | Missing required field (title or author); blocks processing |
 
-**DUPLICATE row behavior:**
+**DUPLICATE row behavior — registry match (`dup_source='registry'`):**
 - Action dropdown pre-selects the next logical copy (Copy 2 if 1 exists, Copy 3 if 2 exist, etc.)
 - If already at 4 copies, pre-selects Skip
 - Clicking the badge opens a popover showing full existing record details (title, author, publisher, year, ISBN, all copy barcodes)
+- Dup-info panel shows existing title + barcode
+
+**DUPLICATE row behavior — same-file match (`dup_source='upload'`):**
+- Triggered when the same book (by ISBN or normalized title+author+edition) appears in a previous row of the same upload (G3)
+- Dup-info panel shows "↑ row N in this file" (no barcode — the first occurrence has not been processed yet)
+- Action dropdown shows only "Skip (duplicate in this file)" — Copy 2/3/4 options are hidden since no primary barcode exists to derive a copy barcode from
+- No popover (nothing in the registry to look up yet)
 
 **FUZZY row behavior:**
 - Confidence score shown below badge (e.g. `~87% match`)
@@ -181,17 +188,19 @@ CREATE TABLE books (
     isbn           TEXT,                      -- cleaned (digits + X only); NULL if absent
     title_norm     TEXT NOT NULL,             -- normalize(title): lowercase, no punctuation
     author_norm    TEXT NOT NULL,             -- normalize_author(): words sorted alphabetically
+    edition_norm   TEXT NOT NULL DEFAULT '',  -- normalize(edition): '' if unknown (G1)
     title_display  TEXT,                      -- raw canonical title (for Bengali volume detection)
     author_display TEXT,                      -- raw canonical author (for popover display)
-    publisher      TEXT,
-    year           TEXT,
+    publisher      TEXT,                      -- stored for display only, not used in dedup key
+    year           TEXT,                      -- stored for display only, not used in dedup key
     barcode        TEXT NOT NULL,             -- primary barcode (10XXXX format)
     copies         INTEGER DEFAULT 1,         -- total physical copies including primary
     added_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
     source_file    TEXT                       -- original Gronthee filename
 );
 
-CREATE UNIQUE INDEX idx_dedup   ON books(title_norm, author_norm);
+-- G1: unique key is title + author + edition (edition='' for books with no edition info)
+CREATE UNIQUE INDEX idx_dedup   ON books(title_norm, author_norm, edition_norm);
 CREATE UNIQUE INDEX idx_barcode ON books(barcode);
 
 -- Login rate-limit state (persisted across restarts)
@@ -203,7 +212,8 @@ CREATE TABLE login_attempts (
 ```
 
 **Key constraints:**
-- `idx_dedup` prevents the same logical book from being registered twice
+- `idx_dedup` prevents the same logical book/edition from being registered twice. The 3-column key `(title_norm, author_norm, edition_norm)` means the same title in two different editions (e.g. "6th Edition" vs "7th Edition") are distinct registry entries
+- `edition_norm = ''` is the default for books with no edition info — they still deduplicate against each other on title+author alone (backward-compatible with pre-G1 data)
 - `idx_barcode` prevents duplicate barcodes (defense against race conditions)
 - `INSERT OR IGNORE` is used on insert; if skipped, a barcode-mismatch check warns if the stored barcode differs from the new one
 - `login_attempts` rows expire naturally: any row whose `since` is older than 15 minutes is treated as cleared and deleted on next check
@@ -226,10 +236,12 @@ Each row dict:
 ```json
 {
   "idx": 0,
-  "status": "NEW",         // NEW | DUPLICATE | FUZZY | ERROR
+  "status": "NEW",          // NEW | DUPLICATE | FUZZY | ERROR
   "action": "skip",
-  "dup_barcode": null,
-  "dup_title": null,
+  "dup_barcode": null,       // primary barcode of registry match; null for same-file dups
+  "dup_title": null,         // display title of matched record
+  "dup_source": null,        // "registry" | "upload" | null — distinguishes match source
+  "dup_row_num": null,       // 1-indexed row number of first occurrence (same-file dups only)
   "fuzzy_score": null,
   "isbn": "9788170662",
   "title": "Galpa Samagra",
@@ -287,18 +299,31 @@ Raw XLSX row (40 columns)
         │       Mirrors clean_catalog.py: registry stores only the primary author (100$a)
         │       Full author string is preserved in cols[] for MARC generation
         │
-        → lookup_dup(isbn, title, author_for_dedup)  → status + dup info
+        → lookup_dup(isbn, title, author_for_dedup, edition)  → registry match or None
+        │       edition = cols[COL_EDITION] (col 6) — passed as-is; normalize() applied inside lookup_dup
+        │
+        → within-upload dedup check (G3) — only when lookup_dup returns None
+        │       seen_in_upload dict is maintained across all rows in the call
+        │       Keys checked in order: ('isbn', isbn) → ('tae', (title_norm, author_norm, edition_norm))
+        │       First occurrence registers the key (setdefault); later occurrences match it
+        │       Match → status='DUPLICATE', dup_source='upload', dup_row_num=<1-indexed>
+        │       No match → status='NEW'
+        │       All rows register their keys (even registry-DUPLICATE rows), so the first
+        │       physical occurrence in the file is always the anchor for subsequent rows
 ```
 
 All synonym dictionaries are loaded from `koha_session_meta.json` at the start of each `build_review_rows()` call.
 
-**Live AJAX dedup re-check (`GET /api/dedup`)** applies the same normalization pipeline — `clean_isbn()`, `prenormalize_title()`, `_first_author_for_dedup()` — before calling `lookup_dup()`. This ensures live edits by the user produce consistent dedup results with the initial load.
+**Live AJAX dedup re-check (`GET /api/dedup`)** applies the same normalization pipeline — `clean_isbn()`, `prenormalize_title()`, `_first_author_for_dedup()` — before calling `lookup_dup()`. Edition is read from the hidden `col_<i>_6` input in the review table and passed as the `edition` query parameter. This ensures live edits by the user produce consistent dedup results with the initial load.
 
 ---
 
 ## 6. Dedup Algorithm (`lookup_dup`)
 
-Three-stage lookup, stopping at the first match:
+Three-stage lookup, stopping at the first match. Signature:
+```python
+lookup_dup(isbn, title, author, edition='') → dict | None
+```
 
 ### Stage 1 — ISBN Exact Match
 ```python
@@ -313,17 +338,24 @@ Most reliable. `clean_isbn()` mirrors `clean_catalog.py`'s `clean_and_convert_is
 
 The registry always stores ISBN-13 (written by `clean_catalog.py` before the audit XLSX is generated). Using the same conversion in `clean_isbn()` ensures a Gronthee export with ISBN-10 matches the registry entry for the same book. Returns `fuzzy=False`.
 
-### Stage 2 — Normalized Title + Author Exact Match
+### Stage 2 — Normalized Title + Author + Edition Exact Match (G1)
 ```python
-nt = normalize(title)        # lowercase, strip punctuation, collapse spaces
-na = normalize_author(author) # normalize then sort words alphabetically
-SELECT * FROM books WHERE title_norm=nt AND author_norm=na
+nt = normalize(title)         # lowercase, strip punctuation, collapse spaces
+na = normalize_author(author)  # normalize then sort words alphabetically
+ne = normalize(edition)        # lowercase, strip punctuation; '' if no edition
+SELECT * FROM books WHERE title_norm=nt AND author_norm=na AND edition_norm=ne
 ```
 Word-order-independent author normalization handles name inversion:
 - `"Ashapurna Devi"` → `"ashapurna devi"`
 - `"Devi, Ashapurna"` → `"ashapurna devi"` (comma stripped, then sorted)
 
-Both map to the same `author_norm` key. Returns `fuzzy=False`.
+**Edition matching behaviour:**
+- `"6th Edition"` and `"7th Edition"` normalize to different strings → no match → treated as different bibs ✓
+- `"1st Edition"` and `"1st edition"` normalize to the same string → match ✓
+- Both editions empty (`''`) → match on title+author alone (same as pre-G1 behaviour) ✓
+- One edition known, other empty → no Stage 2 match (empty `''` ≠ `"1st edition"`) → falls through to Stage 3 fuzzy
+
+Returns `fuzzy=False`.
 
 ### Stage 3 — Fuzzy Match (rapidfuzz)
 Only reached if stages 1 and 2 find no match.
@@ -339,8 +371,13 @@ else:
     candidates = SELECT ... FROM books   # fallback: full scan for short titles
 
 for each candidate in candidates:
-    # Hard block: different volumes are different books
+    # Hard block 1: different volumes are different books
     if _volumes_conflict(title, candidate.title_display):
+        continue
+
+    # Hard block 2 (G1): if both editions are known and differ → different edition,
+    # not a duplicate. Skip candidate entirely.
+    if ne and candidate.edition_norm and ne != candidate.edition_norm:
         continue
 
     t_score = token_sort_ratio(nt, candidate.title_norm)
@@ -359,6 +396,11 @@ Returns the best-scoring candidate with `fuzzy=True` and `fuzzy_score=round(comb
 - English: matches `vol`, `volume`, `part`, `pt`, `khand`, `no`, `episode`, `chapter` + number/roman numeral on **normalized** title
 - Bengali: matches `খণ্ড`, `ভাগ`, `পর্ব`, `সংখ্যা` + digit on **raw** title (combining marks like virama `্` are stripped by `normalize()`, so Bengali must bypass it)
 - If both titles have volume markers and they differ → conflict → skip candidate
+
+**Edition conflict detection (G1):**
+- Only fires when **both** the upload row and the registry candidate have a non-empty edition
+- If either is unknown (`''`), the edition check is skipped — fuzzy title+author alone decides
+- This prevents "Sanchaita 6th Edition" from fuzzy-matching "Sanchaita 7th Edition", while still catching OCR variants like "Sanchaita" (no edition) against "Sanchaita, 6th Edition" (known edition) as a FUZZY match for human review
 
 ---
 
@@ -559,6 +601,7 @@ rapidfuzz      Fuzzy string matching for dedup stage 3
 | `prenormalize_author()` fuzzy stage 2 | `clean_catalog.py` uses rapidfuzz for author synonym matching (threshold 88). Without the same fallback in `app.py`, single-character OCR typos in author names would escape synonym normalization, causing false NEW status for known books. |
 | `_first_author_for_dedup()` splits multi-author field | The registry stores only the primary author (100$a from `clean_catalog.py`). Comparing "A and B" against "A" would never match at Stage 2. The helper extracts only the first author for dedup purposes while preserving the full string in `cols[]` for MARC generation. |
 | Login failures in SQLite not memory | An in-memory dict resets on every server restart, allowing burst brute-force across restarts. Persisting to SQLite means the lockout window is respected even after a crash or deploy. |
+| Same-file duplicates cannot be added as copies | Copy barcode derivation requires the primary barcode from the registry, which doesn't exist until the first occurrence is processed. The action dropdown intentionally hides Copy 2/3/4 for same-file dups (`dup_source='upload'`). If a volunteer legitimately has two physical copies, they should use Gronthee's copy columns (cols 37–39) on the original row rather than scanning the book twice. |
 | 500-row upload cap | Beyond ~500 rows the review table becomes difficult to navigate. Gronthee batches should naturally be smaller (single scanning session). Larger files should be split upstream. |
 | LIKE pre-filter before rapidfuzz (Stage 3) | Full table scan × every uploaded row is O(N×M). The longest significant word (> 3 chars) is a highly selective filter; for 80%+ similar titles it almost always appears in both. Reduces 5,000-candidate scans to < 20 in typical cases. |
 | Confirm modal before process | One-click import with no summary is risky at scale — a misclick could import hundreds of books with wrong data. The modal gives volunteers a final checkpoint showing exact counts. |

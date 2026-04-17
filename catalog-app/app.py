@@ -35,6 +35,7 @@ COL_LANG        = 1
 COL_AUTHOR      = 2
 COL_TITLE       = 3
 COL_SUBTITLE    = 4
+COL_PAGES       = 10
 COL_EDITION     = 6
 COL_YEAR        = 9
 COL_PUBLISHER   = 8
@@ -95,14 +96,17 @@ def init_db():
         ''')
         # Add columns to existing DBs that predate this schema
         for col, coltype in [('title_display', 'TEXT'), ('author_display', 'TEXT'),
-                              ('publisher', 'TEXT'), ('year', 'TEXT')]:
+                              ('publisher', 'TEXT'), ('year', 'TEXT'),
+                              ("edition_norm", "TEXT NOT NULL DEFAULT ''")]:
             try:
                 conn.execute(f'ALTER TABLE books ADD COLUMN {col} {coltype}')
             except Exception:
                 pass
+        # G1: drop old 2-column index and replace with 3-column (title+author+edition)
+        conn.execute('DROP INDEX IF EXISTS idx_dedup')
         conn.execute(
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_dedup '
-            'ON books(title_norm, author_norm)'
+            'ON books(title_norm, author_norm, edition_norm)'
         )
         conn.execute(
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_barcode '
@@ -255,18 +259,20 @@ def _volumes_conflict(title_a: str, title_b: str) -> bool:
     return va != vb         # one or both have markers and they differ
 
 
-def lookup_dup(isbn: str, title: str, author: str) -> dict | None:
+def lookup_dup(isbn: str, title: str, author: str, edition: str = '') -> dict | None:
     """
     Check dedup registry. Three-stage lookup:
       1. ISBN exact match (most reliable)
-      2. Normalized title + author exact match
+      2. Normalized title + author + edition exact match (G1: edition-aware)
       3. Fuzzy title + author match (catches romanization variants)
          — skipped if volumes conflict (Vol 1 ≠ Vol 2)
+         — skipped if both editions are known and differ
 
     Returns dict with keys: barcode, title_norm, copies, fuzzy (bool).
     Returns None if no match.
     """
     isbn_clean = clean_isbn(isbn)
+    ne = normalize(edition)   # edition_norm for this lookup
 
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
@@ -274,20 +280,21 @@ def lookup_dup(isbn: str, title: str, author: str) -> dict | None:
         # 1. ISBN exact match
         if isbn_clean:
             row = conn.execute(
-                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books WHERE isbn=?',
+                'SELECT barcode, title_norm, author_norm, title_display, edition_norm, copies '
+                'FROM books WHERE isbn=?',
                 (isbn_clean,)
             ).fetchone()
             if row:
                 return {**dict(row), 'fuzzy': False}
 
-        # 2. Normalized title + author exact match
+        # 2. Normalized title + author + edition exact match
         nt = normalize(title)
         na = normalize_author(author)
         if nt and na:
             row = conn.execute(
-                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books '
-                'WHERE title_norm=? AND author_norm=?',
-                (nt, na)
+                'SELECT barcode, title_norm, author_norm, title_display, edition_norm, copies '
+                'FROM books WHERE title_norm=? AND author_norm=? AND edition_norm=?',
+                (nt, na, ne)
             ).fetchone()
             if row:
                 return {**dict(row), 'fuzzy': False}
@@ -309,22 +316,27 @@ def lookup_dup(isbn: str, title: str, author: str) -> dict | None:
         sig_words = sorted([w for w in nt.split() if len(w) > 3], key=len, reverse=True)
         if sig_words:
             candidates = conn.execute(
-                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books '
-                'WHERE title_norm LIKE ?',
+                'SELECT barcode, title_norm, author_norm, title_display, edition_norm, copies '
+                'FROM books WHERE title_norm LIKE ?',
                 (f'%{sig_words[0]}%',)
             ).fetchall()
         else:
             candidates = conn.execute(
-                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books'
+                'SELECT barcode, title_norm, author_norm, title_display, edition_norm, copies '
+                'FROM books'
             ).fetchall()
 
         best_score, best_row = 0.0, None
         for cand in candidates:
             # Hard block: different volumes of the same series are distinct books.
-            # Prefer title_display (raw form, combining marks intact) so Bengali
-            # volume words like খণ্ড are detectable.
             cand_title_for_vol = cand['title_display'] or cand['title_norm']
             if _volumes_conflict(title, cand_title_for_vol):
+                continue
+
+            # G1: Hard block — if both editions are known and differ, it's a different
+            # edition of the same work, not a duplicate copy.
+            cand_ne = cand['edition_norm'] or ''
+            if ne and cand_ne and ne != cand_ne:
                 continue
 
             t_score = _fuzz.token_sort_ratio(nt, cand['title_norm'])
@@ -361,12 +373,13 @@ def register_books(books: list, source_file: str) -> tuple[int, str]:
             isbn = clean_isbn(b.get('isbn') or '') or None
             nt = normalize(b['title'])
             na = normalize_author(b['author'])
+            ne = normalize(b.get('edition') or '')
             cur = conn.execute(
                 'INSERT OR IGNORE INTO books '
-                '(isbn, title_norm, author_norm, title_display, author_display, '
+                '(isbn, title_norm, author_norm, edition_norm, title_display, author_display, '
                 'publisher, year, barcode, source_file) '
-                'VALUES (?,?,?,?,?,?,?,?,?)',
-                (isbn or None, nt, na,
+                'VALUES (?,?,?,?,?,?,?,?,?,?)',
+                (isbn or None, nt, na, ne,
                  b['title'],
                  b['author'],
                  b.get('publisher') or None,
@@ -377,11 +390,9 @@ def register_books(books: list, source_file: str) -> tuple[int, str]:
             if cur.rowcount == 0:
                 skipped += 1
                 # Check whether the stored barcode differs from what this run produced.
-                # A mismatch means a previous run registered the same book under a
-                # different barcode — the registry entry is stale relative to Koha.
                 stored = conn.execute(
-                    'SELECT barcode FROM books WHERE title_norm=? AND author_norm=?',
-                    (nt, na)
+                    'SELECT barcode FROM books WHERE title_norm=? AND author_norm=? AND edition_norm=?',
+                    (nt, na, ne)
                 ).fetchone()
                 stored_bc = stored[0] if stored else None
                 if stored_bc and stored_bc != b['barcode']:
@@ -616,12 +627,20 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
     COL_SERIES_IDX    = 12
 
     review = []
+    # G3: track books seen within this upload to flag within-file duplicates
+    # Keys: ('isbn', <isbn>) or ('tae', (title_norm, author_norm, edition_norm))
+    # Values: 0-based row index of first occurrence
+    seen_in_upload: dict = {}
+
     for idx, cols in enumerate(raw_rows):
         cols = list(cols)   # make mutable copy before normalizing
 
         # Clean raw cell values before any normalization
         cols[COL_ISBN] = clean_isbn(cols[COL_ISBN])
         cols[COL_YEAR] = clean_year(cols[COL_YEAR])
+        # Strip Excel float artifact from page count: "300.0" → "300"
+        if len(cols) > COL_PAGES:
+            cols[COL_PAGES] = re.sub(r'\.0+$', '', str(cols[COL_PAGES] or '').strip())
 
         isbn = cols[COL_ISBN]
 
@@ -662,8 +681,23 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
         # only the primary author in the registry). The full author string in cols is
         # preserved so clean_catalog.py can still split "A and B" → 100$a + 700$a.
         author_for_dedup = _first_author_for_dedup(raw_author_pre_invert, meta)
-        dup = lookup_dup(isbn, title, author_for_dedup)
+        edition = cols[COL_EDITION] if len(cols) > COL_EDITION else ''
+        dup = lookup_dup(isbn, title, author_for_dedup, edition)
+
+        # G3: within-upload duplicate check (only when no registry match found)
+        same_file_dup_row = None   # 1-indexed row number of first occurrence in this upload
+        if not dup and title:
+            tn = normalize(title)
+            an = normalize_author(author_for_dedup)
+            ne = normalize(edition)
+            # Check ISBN first (most reliable), then title+author+edition
+            if isbn and ('isbn', isbn) in seen_in_upload:
+                same_file_dup_row = seen_in_upload[('isbn', isbn)] + 1
+            elif tn and an and ('tae', (tn, an, ne)) in seen_in_upload:
+                same_file_dup_row = seen_in_upload[('tae', (tn, an, ne))] + 1
+
         fuzzy_score = None   # initialise so every branch can safely reference it
+        dup_source  = None
         if not title and not author:
             status      = 'ERROR'
             action      = 'skip'
@@ -673,30 +707,57 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
             dup_barcode = dup['barcode']
             dup_title   = dup.get('title_display') or dup['title_norm']
             action      = next_copy_action(dup.get('copies', 1))
+            dup_source  = 'registry'
         elif dup and dup['fuzzy']:
             status      = 'FUZZY'
             dup_barcode = dup['barcode']
             dup_title   = dup.get('title_display') or dup['title_norm']
             fuzzy_score = dup.get('fuzzy_score')
             action      = 'review'  # force reviewer to make an explicit choice
+            dup_source  = 'registry'
+        elif same_file_dup_row is not None:
+            status      = 'DUPLICATE'
+            dup_barcode = None          # no barcode yet — not in registry
+            dup_title   = title         # same title by definition
+            action      = 'skip'        # default; reviewer can change to copy2/3/4
+            dup_source  = 'upload'
         else:
             status      = 'NEW'
             action      = 'skip'
             dup_barcode = dup_title = fuzzy_score = None
 
+        # Register this row's dedup keys so later rows in the same upload can match it.
+        # We always register (even DUPLICATE rows) so the first seen copy is the anchor.
+        if title:
+            tn = normalize(title)
+            an = normalize_author(author_for_dedup)
+            ne = normalize(edition)
+            if isbn:
+                seen_in_upload.setdefault(('isbn', isbn), idx)
+            if tn and an:
+                seen_in_upload.setdefault(('tae', (tn, an, ne)), idx)
+
         review.append({
-            'idx':         idx,
-            'status':      status,
-            'action':      action,
-            'dup_barcode': dup_barcode,
-            'dup_title':   dup_title,
-            'fuzzy_score': fuzzy_score,
-            'isbn':        isbn,
-            'title':       title,
-            'author':      author,
-            'year':        year,
-            'publisher':   publisher,
-            'cols':        cols,
+            'idx':          idx,
+            'status':       status,
+            'action':       action,
+            'dup_barcode':  dup_barcode,
+            'dup_title':    dup_title,
+            'dup_source':   dup_source,
+            'dup_row_num':  same_file_dup_row,
+            'fuzzy_score':  fuzzy_score,
+            'isbn':         isbn,
+            'title':        title,
+            'author':       author,
+            'year':         year,
+            'publisher':    publisher,
+            'subtitle':     cols[COL_SUBTITLE]   if len(cols) > COL_SUBTITLE   else '',
+            'pages':        cols[COL_PAGES]      if len(cols) > COL_PAGES      else '',
+            'category':     cols[14]             if len(cols) > 14             else '',
+            'genre':        cols[15]             if len(cols) > 15             else '',
+            'item_type':    cols[COL_ITEM_TYPE]  if len(cols) > COL_ITEM_TYPE  else '',
+            'ccode':        cols[COL_COLLECTION] if len(cols) > COL_COLLECTION else '',
+            'cols':         cols,
         })
     return review
 
@@ -936,15 +997,16 @@ def api_dedup():
     substitutions and author inversion are consistent between initial load and
     live AJAX re-checks triggered by user edits.
     """
-    isbn   = clean_isbn(request.args.get('isbn', ''))
-    title  = request.args.get('title', '')
-    author = request.args.get('author', '')
-    meta   = load_meta()
+    isbn    = clean_isbn(request.args.get('isbn', ''))
+    title   = request.args.get('title', '')
+    author  = request.args.get('author', '')
+    edition = request.args.get('edition', '')
+    meta    = load_meta()
     # Mirror build_review_rows(): normalize title and author before lookup
     title  = prenormalize_title(title, meta)
     # For multi-author strings, extract first author for dedup (same as clean_catalog.py)
     author = _first_author_for_dedup(author, meta)
-    dup = lookup_dup(isbn, title, author)
+    dup = lookup_dup(isbn, title, author, edition)
     if dup and not dup['fuzzy']:
         return jsonify(status='DUPLICATE',
                        dup_barcode=dup['barcode'],
@@ -1026,6 +1088,12 @@ def process(sid):
         isbn      = request.form.get(f'isbn_{i}',      '').strip()
         year      = request.form.get(f'year_{i}',      '').strip()
         publisher = request.form.get(f'publisher_{i}', '').strip()
+        subtitle  = request.form.get(f'subtitle_{i}',  '').strip()
+        pages     = request.form.get(f'pages_{i}',     '').strip()
+        category  = request.form.get(f'category_{i}',  '').strip()
+        genre     = request.form.get(f'genre_{i}',     '').strip()
+        item_type = request.form.get(f'item_type_{i}', '').strip()
+        ccode     = request.form.get(f'ccode_{i}',     '').strip()
         dup_bc    = request.form.get(f'dup_barcode_{i}', '')
 
         # Rebuild the full 40-column list with user edits applied
@@ -1035,6 +1103,12 @@ def process(sid):
         cols[COL_TITLE]     = title
         if year:      cols[COL_YEAR]      = year
         if publisher: cols[COL_PUBLISHER] = publisher
+        if subtitle:  cols[COL_SUBTITLE]  = subtitle
+        if pages:     cols[COL_PAGES]     = pages
+        if category:  cols[14]            = category
+        if genre:     cols[15]            = genre
+        if item_type: cols[COL_ITEM_TYPE]   = item_type
+        if ccode:     cols[COL_COLLECTION]  = ccode
         # Clear copy trigger columns for all rows (will be set only for copy rows)
         cols[COL_COPY2] = ''
         cols[COL_COPY3] = ''

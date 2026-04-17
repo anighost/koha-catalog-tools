@@ -226,6 +226,7 @@ def extract_processed_books(audit_path: str) -> list:
             'isbn':      str(row[0]  if len(row) > 0  else '').strip(),
             'author':    str(row[2]  if len(row) > 2  else '').strip(),
             'title':     str(row[3]  if len(row) > 3  else '').strip(),
+            'edition':   str(row[6]  if len(row) > 6  else '').strip(),
             'publisher': str(row[8]  if len(row) > 8  else '').strip(),
             'year':      str(row[9]  if len(row) > 9  else '').strip(),
             'barcode':   barcode,

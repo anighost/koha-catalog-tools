@@ -71,6 +71,7 @@
           <th style="width:130px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">ISBN</th>
           <th style="width:65px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Year</th>
           <th style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Publisher</th>
+          <th style="width:44px"></th>
           <th style="width:165px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">
             Action
             <div style="font-size:0.65rem;text-transform:none;letter-spacing:0;color:var(--crimson);
@@ -86,7 +87,7 @@
         <tr data-idx="{{ i }}" data-status="{{ row.status }}"
             style="border-bottom:1px solid #f5f0f0">
           <!-- Status -->
-          <td class="align-middle" style="padding:8px 12px">
+          <td class="align-top" style="padding:8px 12px">
             <span class="badge status-badge badge-{{ row.status|lower }}"
                   style="{% if row.status in ('DUPLICATE','FUZZY') %}cursor:pointer{% endif %}"
                   {% if row.status in ('DUPLICATE','FUZZY') and row.dup_barcode %}
@@ -105,15 +106,20 @@
               ~{{ row.fuzzy_score }}% match
             </div>
             {% endif %}
-            <div class="dup-info" style="margin-top:5px;{% if not row.dup_barcode %}display:none{% endif %}">
+            <div class="dup-info" style="margin-top:5px;{% if not row.dup_barcode and not row.dup_row_num %}display:none{% endif %}">
               {% if row.status == 'FUZZY' and row.dup_title %}
                 <div style="font-size:0.68rem;color:#1a7a8a;font-weight:500;line-height:1.35">&#8776; {{ row.dup_title }}</div>
-              {% elif row.dup_title %}
+              {% elif row.dup_title and row.dup_source == 'registry' %}
                 <div style="font-size:0.68rem;color:var(--text-muted);line-height:1.35;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ row.dup_title }}">{{ row.dup_title }}</div>
               {% endif %}
               {% if row.dup_barcode %}
                 <div style="font-size:0.63rem;color:#a06e18;font-weight:600;letter-spacing:0.04em;margin-top:1px">
                   <span style="opacity:0.6;font-weight:400">bc&nbsp;</span>{{ row.dup_barcode }}
+                </div>
+              {% elif row.dup_row_num %}
+                <div style="font-size:0.63rem;color:#a06e18;font-weight:600;letter-spacing:0.03em;margin-top:1px"
+                     title="This book appears again in this upload — see row {{ row.dup_row_num }}">
+                  &#8593; row {{ row.dup_row_num }} in this file
                 </div>
               {% endif %}
               {% if row.status in ('DUPLICATE','FUZZY') and row.dup_barcode %}
@@ -184,8 +190,21 @@
                    placeholder="—">
           </td>
 
+          <!-- Expand/collapse extra fields -->
+          <td class="align-top" style="padding:6px 6px 6px 0;text-align:center">
+            <button type="button" class="details-toggle-link"
+                    onclick="toggleDetails({{ i }})"
+                    style="font-size:0.68rem;font-family:'Poppins',sans-serif;font-weight:600;
+                           color:#1a7a8a;background:#e8f5f7;border:1px solid #a8d8df;
+                           border-radius:6px;padding:3px 7px;cursor:pointer;
+                           white-space:nowrap;line-height:1.4;transition:background .12s"
+                    title="Show / hide subtitle, pages, category, genre, item type, collection">
+              + more
+            </button>
+          </td>
+
           <!-- Action -->
-          <td class="align-middle" style="padding:6px 8px">
+          <td class="align-top" style="padding:6px 8px">
             <select name="action_{{ i }}"
                     class="form-select form-select-sm action-select
                            {% if row.status not in ('DUPLICATE', 'FUZZY') %}d-none{% endif %}"
@@ -202,10 +221,13 @@
               <option value="review" {% if row.action == 'review' %}selected{% endif %}
                       {% if row.status != 'FUZZY' %}hidden{% endif %}
                       style="color:#aaa;font-style:italic">— Select action —</option>
-              <option value="skip"  {% if row.action == 'skip'  %}selected{% endif %}>Skip (already in Koha)</option>
-              <option value="copy2" {% if row.action == 'copy2' %}selected{% endif %}>Add as Copy 2</option>
-              <option value="copy3" {% if row.action == 'copy3' %}selected{% endif %}>Add as Copy 3</option>
-              <option value="copy4" {% if row.action == 'copy4' %}selected{% endif %}>Add as Copy 4</option>
+              <option value="skip"  {% if row.action == 'skip'  %}selected{% endif %}>{% if row.dup_source == 'upload' %}Skip (duplicate in this file){% else %}Skip (already in Koha){% endif %}</option>
+              <option value="copy2" {% if row.action == 'copy2' %}selected{% endif %}
+                      {% if row.dup_source == 'upload' %}hidden{% endif %}>Add as Copy 2</option>
+              <option value="copy3" {% if row.action == 'copy3' %}selected{% endif %}
+                      {% if row.dup_source == 'upload' %}hidden{% endif %}>Add as Copy 3</option>
+              <option value="copy4" {% if row.action == 'copy4' %}selected{% endif %}
+                      {% if row.dup_source == 'upload' %}hidden{% endif %}>Add as Copy 4</option>
               <option value="new"   {% if row.action == 'new'   %}selected{% endif %}
                       {% if row.status != 'FUZZY' %}hidden{% endif %}>Import as new book</option>
             </select>
@@ -214,13 +236,131 @@
           <!-- Hidden state -->
           <input type="hidden" name="status_{{ i }}"      class="status-hidden"     value="{{ row.status }}">
           <input type="hidden" name="dup_barcode_{{ i }}" class="dup-barcode-hidden" value="{{ row.dup_barcode or '' }}">
+          <input type="hidden" name="dup_source_{{ i }}"                             value="{{ row.dup_source or '' }}">
           <input type="hidden" name="deleted_{{ i }}"     class="deleted-hidden"     value="">
-          {% set col_skip = [0, 2, 3, 8, 9] %}
+          {# col_skip: ISBN=0, author=2, title=3, subtitle=4, publisher=8, year=9,
+             pages=10, subject1=14, subject2=15, item_type=25, ccode=27
+             — these are rendered as real inputs (main row or detail row) #}
+          {% set col_skip = [0, 2, 3, 4, 8, 9, 10, 14, 15, 25, 27] %}
           {% for ci in range(40) %}
             {% if ci not in col_skip %}
           <input type="hidden" name="col_{{ i }}_{{ ci }}" value="{{ row.cols[ci] if ci < row.cols|length else '' }}">
             {% endif %}
           {% endfor %}
+        </tr>
+
+        {# ── Expandable detail row ── #}
+        <tr class="detail-row" id="detail-row-{{ i }}"
+            style="display:none;background:#fdfbfb;border-bottom:2px solid #f0dede">
+          <td colspan="8" style="padding:10px 16px 14px 52px">
+            <div style="display:flex;flex-wrap:wrap;gap:14px 20px;align-items:flex-end">
+
+              {# Subtitle #}
+              <div style="flex:1 1 200px;min-width:160px">
+                <label style="display:block;font-size:0.67rem;text-transform:uppercase;
+                              letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">
+                  Subtitle</label>
+                <input type="text" name="subtitle_{{ i }}" value="{{ row.subtitle }}"
+                       class="form-control form-control-sm detail-input"
+                       style="border-radius:6px;border-color:var(--border);
+                              font-size:0.8rem;font-family:'Poppins',sans-serif"
+                       placeholder="—">
+              </div>
+
+              {# Pages #}
+              <div style="flex:0 0 80px">
+                <label style="display:block;font-size:0.67rem;text-transform:uppercase;
+                              letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">
+                  Pages</label>
+                <input type="text" name="pages_{{ i }}" value="{{ row.pages }}"
+                       class="form-control form-control-sm detail-input"
+                       style="border-radius:6px;border-color:var(--border);
+                              font-size:0.8rem;font-family:'Poppins',sans-serif;width:76px"
+                       placeholder="—">
+              </div>
+
+              {# Category (subject 1 / col 14) #}
+              <div style="flex:1 1 160px;min-width:130px">
+                <label style="display:block;font-size:0.67rem;text-transform:uppercase;
+                              letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">
+                  Category</label>
+                <input type="text" name="category_{{ i }}" value="{{ row.category }}"
+                       class="form-control form-control-sm detail-input"
+                       style="border-radius:6px;border-color:var(--border);
+                              font-size:0.8rem;font-family:'Poppins',sans-serif"
+                       placeholder="—">
+              </div>
+
+              {# Genre (subject 2 / col 15) #}
+              <div style="flex:1 1 160px;min-width:130px">
+                <label style="display:block;font-size:0.67rem;text-transform:uppercase;
+                              letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">
+                  Genre</label>
+                <input type="text" name="genre_{{ i }}" value="{{ row.genre }}"
+                       class="form-control form-control-sm detail-input"
+                       style="border-radius:6px;border-color:var(--border);
+                              font-size:0.8rem;font-family:'Poppins',sans-serif"
+                       placeholder="—">
+              </div>
+
+              {# Item Type (col 25) #}
+              <div style="flex:0 0 170px">
+                <label style="display:block;font-size:0.67rem;text-transform:uppercase;
+                              letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">
+                  Item Type</label>
+                <select name="item_type_{{ i }}"
+                        class="form-select form-select-sm detail-input"
+                        style="border-radius:6px;border-color:var(--border);
+                               font-size:0.78rem;font-family:'Poppins',sans-serif">
+                  <option value="">— default (BK) —</option>
+                  <option value="ASB"  {% if row.item_type == 'ASB'  %}selected{% endif %}>ASB — Author Signed</option>
+                  <option value="BK"   {% if row.item_type == 'BK'   %}selected{% endif %}>BK — Book</option>
+                  <option value="CF"   {% if row.item_type == 'CF'   %}selected{% endif %}>CF — Computer File</option>
+                  <option value="CR"   {% if row.item_type == 'CR'   %}selected{% endif %}>CR — Continuing Resource</option>
+                  <option value="MP"   {% if row.item_type == 'MP'   %}selected{% endif %}>MP — Map</option>
+                  <option value="MU"   {% if row.item_type == 'MU'   %}selected{% endif %}>MU — Music</option>
+                  <option value="MX"   {% if row.item_type == 'MX'   %}selected{% endif %}>MX — Mixed Material</option>
+                  <option value="RB"   {% if row.item_type == 'RB'   %}selected{% endif %}>RB — Rare Book</option>
+                  <option value="REF"  {% if row.item_type == 'REF'  %}selected{% endif %}>REF — Reference</option>
+                  <option value="VM"   {% if row.item_type == 'VM'   %}selected{% endif %}>VM — Visual Material</option>
+                </select>
+              </div>
+
+              {# Collection (ccode / col 27) #}
+              <div style="flex:0 0 180px">
+                <label style="display:block;font-size:0.67rem;text-transform:uppercase;
+                              letter-spacing:.05em;color:var(--text-muted);margin-bottom:3px">
+                  Collection</label>
+                <select name="ccode_{{ i }}"
+                        class="form-select form-select-sm detail-input"
+                        style="border-radius:6px;border-color:var(--border);
+                               font-size:0.78rem;font-family:'Poppins',sans-serif">
+                  <option value="">— none —</option>
+                  <option value="ART"   {% if row.ccode == 'ART'   %}selected{% endif %}>ART — Art</option>
+                  <option value="BIO"   {% if row.ccode == 'BIO'   %}selected{% endif %}>BIO — Biography</option>
+                  <option value="CHI"   {% if row.ccode == 'CHI'   %}selected{% endif %}>CHI — Children</option>
+                  <option value="COLL"  {% if row.ccode == 'COLL'  %}selected{% endif %}>COLL — Collected Works</option>
+                  <option value="COOK"  {% if row.ccode == 'COOK'  %}selected{% endif %}>COOK — Cooking</option>
+                  <option value="CRI"   {% if row.ccode == 'CRI'   %}selected{% endif %}>CRI — Criticism</option>
+                  <option value="ESSY"  {% if row.ccode == 'ESSY'  %}selected{% endif %}>ESSY — Essay</option>
+                  <option value="FIC"   {% if row.ccode == 'FIC'   %}selected{% endif %}>FIC — Fiction</option>
+                  <option value="HIST"  {% if row.ccode == 'HIST'  %}selected{% endif %}>HIST — History</option>
+                  <option value="MISC"  {% if row.ccode == 'MISC'  %}selected{% endif %}>MISC — Miscellaneous</option>
+                  <option value="MUSC"  {% if row.ccode == 'MUSC'  %}selected{% endif %}>MUSC — Music</option>
+                  <option value="MYTH"  {% if row.ccode == 'MYTH'  %}selected{% endif %}>MYTH — Mythology</option>
+                  <option value="NFIC"  {% if row.ccode == 'NFIC'  %}selected{% endif %}>NFIC — Non-Fiction</option>
+                  <option value="PLAY"  {% if row.ccode == 'PLAY'  %}selected{% endif %}>PLAY — Play</option>
+                  <option value="POET"  {% if row.ccode == 'POET'  %}selected{% endif %}>POET — Poetry</option>
+                  <option value="REF"   {% if row.ccode == 'REF'   %}selected{% endif %}>REF — Reference</option>
+                  <option value="SCIFI" {% if row.ccode == 'SCIFI' %}selected{% endif %}>SCIFI — Sci-Fi</option>
+                  <option value="SPI"   {% if row.ccode == 'SPI'   %}selected{% endif %}>SPI — Spiritual</option>
+                  <option value="SPO"   {% if row.ccode == 'SPO'   %}selected{% endif %}>SPO — Sports</option>
+                  <option value="TRVL"  {% if row.ccode == 'TRVL'  %}selected{% endif %}>TRVL — Travel</option>
+                </select>
+              </div>
+
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -336,7 +476,7 @@
         ? '<div style="font-size:0.68rem;color:' + titleColor + ';font-weight:' + (isFuzzy?'500':'400') + ';line-height:1.35;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + dt + '">' + titlePrefix + dt + '</div>'
         : '')
         + (dupBarcode ? '<div style="font-size:0.63rem;color:' + bcColor + ';font-weight:600;letter-spacing:0.04em;margin-top:1px"><span style="opacity:0.6;font-weight:400">bc&nbsp;</span>' + dupBarcode + '</div>' : '')
-        + '<span style="color:var(--crimson);font-size:0.62rem;cursor:pointer;margin-top:2px;display:inline-block" onclick="var b=this.closest(\'td\').querySelector(\'.status-badge\');closeAllPopovers(b);bootstrap.Popover.getInstance(b).show()">&#9432; view details</span>';
+        + (dupBarcode ? '<span style="color:var(--crimson);font-size:0.62rem;cursor:pointer;margin-top:2px;display:inline-block" onclick="var b=this.closest(\'td\').querySelector(\'.status-badge\');closeAllPopovers(b);bootstrap.Popover.getInstance(b).show()">&#9432; view details</span>' : '');
       if (isFuzzy && d && d.fuzzy_score) {
         var scoreDiv = document.createElement('div');
         scoreDiv.className = 'fuzzy-score-line';
@@ -386,13 +526,15 @@
   }
 
   function checkDedup(tr) {
-    var idx    = tr.dataset.idx;
-    var isbn   = tr.querySelector('.f-isbn').value.trim();
-    var title  = tr.querySelector('.f-title').value.trim();
-    var author = tr.querySelector('.f-author').value.trim();
+    var idx     = tr.dataset.idx;
+    var isbn    = tr.querySelector('.f-isbn').value.trim();
+    var title   = tr.querySelector('.f-title').value.trim();
+    var author  = tr.querySelector('.f-author').value.trim();
+    var edIn    = tr.querySelector('input[name="col_' + idx + '_6"]');
+    var edition = edIn ? edIn.value.trim() : '';
     clearTimeout(timers[idx]);
     timers[idx] = setTimeout(function () {
-      fetch(DEDUP_URL + '?' + new URLSearchParams({isbn:isbn, title:title, author:author}))
+      fetch(DEDUP_URL + '?' + new URLSearchParams({isbn:isbn, title:title, author:author, edition:edition}))
         .then(function(r){ return r.json(); })
         .then(function(d){ updateRow(tr, d.status, d.dup_barcode, d.next_action, d); })
         .catch(function(){});
@@ -655,6 +797,9 @@
       var isbn   = (tr.querySelector('input[name^="isbn_"]') || {value:''}).value.toLowerCase();
       var match  = !q || title.includes(q) || author.includes(q) || isbn.includes(q);
       tr.style.display = match ? '' : 'none';
+      // Detail row follows parent row — hide when parent is hidden; restore if it was open
+      var dr = document.getElementById('detail-row-' + tr.dataset.idx);
+      if (dr) dr.style.display = (match && dr.dataset.open === '1') ? '' : 'none';
       if (match) shown++;
     });
     filterCount.textContent = q ? shown + ' of ' + rows.length + ' rows' : '';
@@ -671,12 +816,38 @@
   }, 5 * 60 * 1000);
 
   // ── U3: Exclude / restore row ─────────────────────────────────────────
+  // ── Expandable detail row toggle ─────────────────────────────────────
+  window.toggleDetails = function(i) {
+    var dr = document.getElementById('detail-row-' + i);
+    if (!dr) return;
+    var isOpen = dr.dataset.open === '1';
+    dr.dataset.open = isOpen ? '0' : '1';
+    dr.style.display = isOpen ? 'none' : '';
+    // Update toggle button appearance
+    var tr = document.querySelector('tr[data-idx="' + i + '"]');
+    if (tr) {
+      var btn = tr.querySelector('.details-toggle-link');
+      if (btn) {
+        btn.innerHTML = isOpen ? '+ more' : '&minus; less';
+        btn.style.background  = isOpen ? '#e8f5f7' : '#c8ecf0';
+        btn.style.borderColor = isOpen ? '#a8d8df' : '#7ec8d0';
+        btn.style.color       = isOpen ? '#1a7a8a' : '#115a68';
+      }
+    }
+  };
+
   window.excludeRow = function(tr) {
     tr.querySelector('.deleted-hidden').value = '1';
     tr.style.opacity = '0.3';
     tr.querySelectorAll('input:not([type=hidden]),select').forEach(function(el) {
       el.disabled = true;
     });
+    // Also disable detail row inputs
+    var dr = document.getElementById('detail-row-' + tr.dataset.idx);
+    if (dr) {
+      dr.style.opacity = '0.3';
+      dr.querySelectorAll('input,select').forEach(function(el) { el.disabled = true; });
+    }
     // Replace "exclude row" link with "restore" link
     var ctrl = tr.querySelector('.exclude-row-ctrl');
     if (ctrl) {
@@ -692,6 +863,12 @@
     tr.querySelectorAll('input:not([type=hidden]),select').forEach(function(el) {
       el.disabled = false;
     });
+    // Also re-enable detail row inputs
+    var dr = document.getElementById('detail-row-' + tr.dataset.idx);
+    if (dr) {
+      dr.style.opacity = '';
+      dr.querySelectorAll('input,select').forEach(function(el) { el.disabled = false; });
+    }
     var ctrl = tr.querySelector('.exclude-row-ctrl');
     if (ctrl) {
       ctrl.innerHTML = '<span class="exclude-link" style="font-size:0.6rem;color:#bbb;cursor:pointer;text-decoration:underline dotted" '
