@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Upload — Dishari Catalog{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="dfl-card p-4 mb-3">
+      <div class="section-title">Upload Gronthee File</div>
+      <p class="text-muted small mb-4">
+        Upload a CSV or XLSX exported from <strong>gronthee.vercel.app</strong>.<br>
+        You'll review and correct OCR errors before processing.
+      </p>
+      <form method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data" id="upload-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-4">
+          <!-- Drop zone -->
+          <div id="drop-zone"
+               style="border:2px dashed var(--border);border-radius:10px;padding:28px 20px;
+                      text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
+                      background:#fafafa">
+            <div id="drop-icon" style="font-size:1.6rem;margin-bottom:6px;line-height:1">&#8659;</div>
+            <div id="drop-label" style="font-size:0.84rem;color:var(--text-muted)">
+              Drag &amp; drop your file here, or
+              <span style="color:var(--crimson);font-weight:500;cursor:pointer"
+                    onclick="document.getElementById('file-input').click()">select a file</span>
+            </div>
+            <div id="drop-filename" style="display:none;margin-top:8px;font-size:0.82rem;
+                                           font-weight:500;color:var(--text)"></div>
+            <div style="font-size:0.72rem;color:#aaa;margin-top:6px">
+              .xlsx / .xls / .csv &nbsp;·&nbsp; Max 10 MB
+            </div>
+          </div>
+          <!-- Hidden actual input -->
+          <input type="file" name="file" id="file-input" accept=".xlsx,.xls,.csv" required
+                 style="display:none">
+        </div>
+        <button type="submit" class="btn btn-dfl" id="upload-btn" disabled>
+          Upload &amp; Review &rarr;
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-md-4 offset-md-1">
+    <div class="dfl-card p-4"
+         style="background:linear-gradient(135deg,#e0e8f5 0%,#f5eeee 100%);border-color:#e8cfc4">
+      <div class="section-title">How it works</div>
+      <ol class="small mb-0 ps-3" style="color:var(--text-muted);line-height:2">
+        <li>Upload the Gronthee output file</li>
+        <li>Review the table — fix any Bengali OCR misreads</li>
+        <li>Duplicates are flagged automatically</li>
+        <li>Choose to skip or add as a physical copy</li>
+        <li>Click <strong style="color:var(--text)">Process &amp; Import to Koha</strong></li>
+      </ol>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var zone  = document.getElementById('drop-zone');
+  var input = document.getElementById('file-input');
+  var btn   = document.getElementById('upload-btn');
+  var label = document.getElementById('drop-label');
+  var fname = document.getElementById('drop-filename');
+  var icon  = document.getElementById('drop-icon');
+
+  function setFile(file) {
+    if (!file) return;
+    input.files;  // already set via DataTransfer or input change
+    fname.textContent = file.name;
+    fname.style.display = '';
+    label.style.display = 'none';
+    icon.textContent = '✓';
+    icon.style.color = '#2e7d6b';
+    zone.style.borderColor = '#2e7d6b';
+    zone.style.background  = '#f0faf6';
+    btn.disabled = false;
+  }
+
+  // Click anywhere on zone → open file picker
+  zone.addEventListener('click', function (e) {
+    if (e.target.tagName !== 'SPAN') input.click();
+  });
+
+  // File picker change
+  input.addEventListener('change', function () {
+    if (this.files[0]) setFile(this.files[0]);
+  });
+
+  // Drag events
+  zone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    zone.style.borderColor = 'var(--crimson)';
+    zone.style.background  = '#fdf3f3';
+  });
+  zone.addEventListener('dragleave', function (e) {
+    if (!zone.contains(e.relatedTarget)) {
+      zone.style.borderColor = 'var(--border)';
+      zone.style.background  = '#fafafa';
+    }
+  });
+  zone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    zone.style.borderColor = 'var(--border)';
+    zone.style.background  = '#fafafa';
+    var file = e.dataTransfer.files[0];
+    if (!file) return;
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx','xls','csv'].includes(ext)) {
+      zone.style.borderColor = 'var(--crimson)';
+      fname.textContent = 'Only .xlsx / .xls / .csv files are accepted.';
+      fname.style.color = 'var(--crimson)';
+      fname.style.display = '';
+      return;
+    }
+    // Assign dropped file to the hidden input via DataTransfer
+    var dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    setFile(file);
+  });
+})();
+</script>
+{% endblock %}

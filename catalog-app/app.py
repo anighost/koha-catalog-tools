@@ -1,0 +1,1152 @@
+"""
+app.py — Dishari Catalog Web App
+Flask app: upload Gronthee XLSX → review & fix OCR errors → dedup check →
+process via clean_catalog.py → one-click import to Koha.
+"""
+
+import json, logging, os, re, secrets, shlex, shutil, sqlite3, subprocess, tempfile, time, uuid
+from datetime import datetime, timedelta
+from functools import wraps
+from pathlib import Path
+
+import openpyxl
+from flask import (Flask, flash, jsonify, redirect, render_template,
+                   request, send_file, session, url_for)
+
+import catalog_engine
+
+# ── Configuration ──────────────────────────────────────────────────────────
+BASE_DIR    = Path(__file__).parent
+DB_PATH     = BASE_DIR / 'dedup_registry.db'
+SESSIONS_DIR = BASE_DIR / 'sessions'
+UPLOADS_DIR  = BASE_DIR / 'uploads'
+OUTPUT_DIR   = BASE_DIR / 'output'
+
+for d in (SESSIONS_DIR, UPLOADS_DIR, OUTPUT_DIR):
+    d.mkdir(exist_ok=True)
+
+CATALOG_PASSWORD  = os.environ.get('CATALOG_PASSWORD', 'changeme')
+KOHA_INSTANCE     = os.environ.get('KOHA_INSTANCE', 'dishari_lib')
+KOHA_MATCH_RULE   = os.environ.get('KOHA_MATCH_RULE', 'STRICT_CLE')
+
+# Column indices — must match clean_catalog.py
+COL_ISBN        = 0
+COL_LANG        = 1
+COL_AUTHOR      = 2
+COL_TITLE       = 3
+COL_SUBTITLE    = 4
+COL_EDITION     = 6
+COL_YEAR        = 9
+COL_PUBLISHER   = 8
+COL_PLACE       = 7
+COL_CALL_NO     = 34
+COL_ITEM_TYPE   = 25
+COL_COLLECTION  = 27
+COL_BRANCH_HOME = 28
+COL_BRANCH_HOLD = 29
+COL_DATE        = 31
+COL_COST        = 33
+COL_BARCODE     = 35
+COL_COPY2       = 37
+COL_COPY3       = 38
+COL_COPY4       = 39
+
+COPY_PREFIX = {'copy2': '11', 'copy3': '12', 'copy4': '13'}
+
+# ── App init ───────────────────────────────────────────────────────────────
+app = Flask(__name__)
+_secret = os.environ.get('FLASK_SECRET_KEY', '')
+if not _secret:
+    _secret = secrets.token_hex(32)
+    logging.warning(
+        'FLASK_SECRET_KEY not set — generated a random key. '
+        'All sessions will be lost on restart. '
+        'Set FLASK_SECRET_KEY in your systemd unit file.'
+    )
+app.secret_key = _secret
+app.permanent_session_lifetime = timedelta(hours=4)
+
+
+# ── Database ───────────────────────────────────────────────────────────────
+def init_db():
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS books (
+                id            INTEGER PRIMARY KEY,
+                isbn          TEXT,
+                title_norm    TEXT NOT NULL,
+                author_norm   TEXT NOT NULL,
+                title_display TEXT,
+                author_display TEXT,
+                barcode       TEXT NOT NULL,
+                copies        INTEGER DEFAULT 1,
+                added_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+                source_file   TEXT
+            )
+        ''')
+        # Add columns to existing DBs that predate this schema
+        for col, coltype in [('title_display', 'TEXT'), ('author_display', 'TEXT'),
+                              ('publisher', 'TEXT'), ('year', 'TEXT')]:
+            try:
+                conn.execute(f'ALTER TABLE books ADD COLUMN {col} {coltype}')
+            except Exception:
+                pass
+        conn.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_dedup '
+            'ON books(title_norm, author_norm)'
+        )
+        conn.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_barcode '
+            'ON books(barcode)'
+        )
+
+init_db()
+
+
+def normalize(text: str) -> str:
+    """Normalize text for dedup: lowercase, strip punctuation, collapse spaces."""
+    if not text:
+        return ''
+    text = text.lower().strip()
+    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def normalize_author(text: str) -> str:
+    """
+    Word-order-independent author normalization.
+    Handles inverted names from clean_catalog.py:
+      "Ashapurna Devi"  → "ashapurna devi"
+      "Devi, Ashapurna" → "ashapurna devi"  (comma stripped, words sorted)
+    Both map to the same registry key.
+    """
+    return ' '.join(sorted(normalize(text).split()))
+
+
+def clean_isbn(isbn: str) -> str:
+    """Normalize an ISBN cell value.
+    - Strips Excel float artifact: '8170669677.0' → '8170669677'
+    - Any non-numeric string (Na, N/A, n.a., none, -, not available, …)
+      becomes '' because valid ISBNs contain only digits and X.
+    """
+    s = (isbn or '').strip()
+    # Remove trailing .0 / .00 from Excel float conversion
+    s = re.sub(r'\.0+$', '', s)
+    # Keep only digits and X — everything else (including all NA variants) becomes ''
+    s = re.sub(r'[^\dXx]', '', s).upper()
+    return s
+
+
+def next_copy_action(copies: int) -> str:
+    """
+    Given the number of copies already in the registry, return the action to
+    pre-select in the review dropdown.
+      1 copy  (10xxxx only)  → add copy 2  (11xxxx)
+      2 copies               → add copy 3  (12xxxx)
+      3 copies               → add copy 4  (13xxxx)
+      4+ copies              → skip (barcode scheme maxes out at 4 copies)
+    """
+    return {1: 'copy2', 2: 'copy3', 3: 'copy4'}.get(copies, 'skip')
+
+
+def clean_year(year: str) -> str:
+    """Strip Excel float artifact ('1907.0' → '1907')."""
+    s = (year or '').strip()
+    s = re.sub(r'\.0+$', '', s)
+    return s
+
+
+# English volume markers — run on normalize(title) where Bengali marks are stripped.
+_VOL_RE = re.compile(
+    r'\b(vol(?:ume)?|part|pt|khand(?:a)?|no|episode|chapter)\s*\.?\s*'
+    r'(\d+|i{1,3}|iv|vi{0,3}|ix|x{1,3})\b',
+    re.IGNORECASE
+)
+# Bengali volume markers — run on the RAW title because normalize() strips
+# combining marks (virama ্, vowel signs) that are part of these words.
+# Covers: খণ্ড (khanda), ভাগ (bhag), পর্ব (parba), সংখ্যা (sankhya)
+_BN_VOL_RE = re.compile(
+    r'(খণ্ড|ভাগ|পর্ব|সংখ্যা)\s*([০-৯\d]+)'
+)
+_ROMAN = {'i': 1, 'ii': 2, 'iii': 3, 'iv': 4, 'v': 5,
+          'vi': 6, 'vii': 7, 'viii': 8, 'ix': 9, 'x': 10}
+# Translate Bengali digits → ASCII digits for comparison
+_BN_DIGITS = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+
+
+def extract_volume(title: str):
+    """
+    Return a normalised volume number string if the title contains a volume/part
+    indicator, else None.
+      "Sharadindu Omnibus Vol 2"  → "2"
+      "Sharadindu Omnibus Vol II" → "2"  (roman → arabic)
+      "রবীন্দ্র রচনাবলী খণ্ড ২"   → "2"  (Bengali, raw title)
+      "Na Hanyate"                → None
+    """
+    # English path — search on normalized title
+    m = _VOL_RE.search(normalize(title))
+    if m:
+        val = m.group(2).lower()
+        return str(_ROMAN.get(val, val))
+    # Bengali path — search on raw title (combining marks preserved)
+    m = _BN_VOL_RE.search(title)
+    if m:
+        return m.group(2).translate(_BN_DIGITS)
+    return None
+
+
+def _volumes_conflict(title_a: str, title_b: str) -> bool:
+    """
+    Return True if the two titles have volume indicators that differ.
+    If either title has NO volume indicator, no conflict is declared
+    (we let the fuzzy score decide).
+    """
+    va, vb = extract_volume(title_a), extract_volume(title_b)
+    if va is None and vb is None:
+        return False        # neither has a volume marker — no conflict
+    return va != vb         # one or both have markers and they differ
+
+
+def lookup_dup(isbn: str, title: str, author: str) -> dict | None:
+    """
+    Check dedup registry. Three-stage lookup:
+      1. ISBN exact match (most reliable)
+      2. Normalized title + author exact match
+      3. Fuzzy title + author match (catches romanization variants)
+         — skipped if volumes conflict (Vol 1 ≠ Vol 2)
+
+    Returns dict with keys: barcode, title_norm, copies, fuzzy (bool).
+    Returns None if no match.
+    """
+    isbn_clean = clean_isbn(isbn)
+
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.row_factory = sqlite3.Row
+
+        # 1. ISBN exact match
+        if isbn_clean:
+            row = conn.execute(
+                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books WHERE isbn=?',
+                (isbn_clean,)
+            ).fetchone()
+            if row:
+                return {**dict(row), 'fuzzy': False}
+
+        # 2. Normalized title + author exact match
+        nt = normalize(title)
+        na = normalize_author(author)
+        if nt and na:
+            row = conn.execute(
+                'SELECT barcode, title_norm, author_norm, title_display, copies FROM books '
+                'WHERE title_norm=? AND author_norm=?',
+                (nt, na)
+            ).fetchone()
+            if row:
+                return {**dict(row), 'fuzzy': False}
+
+        # 3. Fuzzy fallback — only when rapidfuzz is available
+        if not (nt and na):
+            return None
+        try:
+            from rapidfuzz import fuzz as _fuzz
+        except ImportError:
+            return None
+
+        TITLE_THRESHOLD  = 80   # title similarity %
+        AUTHOR_THRESHOLD = 72   # author similarity % (lower: romanization varies more)
+
+        candidates = conn.execute(
+            'SELECT barcode, title_norm, author_norm, title_display, copies FROM books'
+        ).fetchall()
+
+        best_score, best_row = 0.0, None
+        for cand in candidates:
+            # Hard block: different volumes of the same series are distinct books.
+            # Prefer title_display (raw form, combining marks intact) so Bengali
+            # volume words like খণ্ড are detectable.
+            cand_title_for_vol = cand['title_display'] or cand['title_norm']
+            if _volumes_conflict(title, cand_title_for_vol):
+                continue
+
+            t_score = _fuzz.token_sort_ratio(nt, cand['title_norm'])
+            if t_score < TITLE_THRESHOLD:
+                continue
+
+            a_score = _fuzz.token_sort_ratio(na, cand['author_norm'])
+            if a_score < AUTHOR_THRESHOLD:
+                continue
+
+            # Combined score weighted toward title
+            combined = t_score * 0.65 + a_score * 0.35
+            if combined > best_score:
+                best_score = combined
+                best_row   = cand
+
+        if best_row:
+            return {**dict(best_row), 'fuzzy': True, 'fuzzy_score': round(best_score)}
+
+    return None
+
+
+def register_books(books: list, source_file: str) -> tuple[int, str]:
+    """
+    Insert newly processed books into the dedup registry.
+    Returns (skipped_count, warnings) where warnings is a newline-joined string
+    of any barcode mismatches detected (same title+author but different barcode
+    in registry vs. this run — usually means a prior dry-run used a different barcode).
+    """
+    skipped = 0
+    warnings = []
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        for b in books:
+            isbn = clean_isbn(b.get('isbn') or '') or None
+            nt = normalize(b['title'])
+            na = normalize_author(b['author'])
+            cur = conn.execute(
+                'INSERT OR IGNORE INTO books '
+                '(isbn, title_norm, author_norm, title_display, author_display, '
+                'publisher, year, barcode, source_file) '
+                'VALUES (?,?,?,?,?,?,?,?,?)',
+                (isbn or None, nt, na,
+                 b['title'],
+                 b['author'],
+                 b.get('publisher') or None,
+                 b.get('year') or None,
+                 b['barcode'],
+                 source_file)
+            )
+            if cur.rowcount == 0:
+                skipped += 1
+                # Check whether the stored barcode differs from what this run produced.
+                # A mismatch means a previous run registered the same book under a
+                # different barcode — the registry entry is stale relative to Koha.
+                stored = conn.execute(
+                    'SELECT barcode FROM books WHERE title_norm=? AND author_norm=?',
+                    (nt, na)
+                ).fetchone()
+                stored_bc = stored[0] if stored else None
+                if stored_bc and stored_bc != b['barcode']:
+                    msg = (
+                        f'Barcode mismatch for "{b.get("title","?")}": '
+                        f'registry has {stored_bc}, this run produced {b["barcode"]}. '
+                        f'Registry NOT updated — verify which barcode is in Koha.'
+                    )
+                    warnings.append(msg)
+                    logging.warning('register_books: %s', msg)
+                else:
+                    logging.info(
+                        'register_books: skipped "%s" (barcode %s) — already in registry',
+                        b.get('title', '?'), b.get('barcode', '?')
+                    )
+    return skipped, '\n'.join(warnings)
+
+
+
+# ── Session helpers ────────────────────────────────────────────────────────
+def session_path(sid: str) -> Path:
+    return SESSIONS_DIR / f'{sid}.json'
+
+
+def load_meta() -> dict:
+    """Load koha_session_meta.json to get synonym dictionaries."""
+    p = catalog_engine.META_FILE
+    if p.exists():
+        return json.loads(p.read_text(encoding='utf-8'))
+    return {}
+
+
+def prenormalize_author(raw: str, meta: dict) -> str:
+    """
+    Apply author synonym lookup + name inversion to mirror clean_catalog.py.
+    "Ashapurna Devi"    → "Devi, Ashapurna"
+    "sunil ganguly"     → "Gangopadhyay, Sunil"  (via synonyms_author)
+    Already-inverted names ("Devi, Ashapurna") are left unchanged.
+    """
+    raw = raw.strip()
+    if not raw:
+        return raw
+
+    # Synonym match (all-words, case-insensitive) — same as clean_catalog.py
+    raw_lower = raw.lower()
+    matched = raw
+    for standard, variations in meta.get('synonyms_author', {}).items():
+        for v in variations:
+            if all(w in raw_lower for w in v.lower().split()):
+                matched = standard
+                break
+        else:
+            continue
+        break
+
+    # Inversion: skip if already comma-separated or multi-author
+    if ',' in matched:
+        return matched
+    if re.search(r'\s+and\s+|\s*&\s*', matched, flags=re.IGNORECASE):
+        return matched
+    # Remove trailing "et al."
+    matched = re.sub(r'\s+et\.?\s+al\.?$', '', matched, flags=re.IGNORECASE).strip()
+    parts = matched.split()
+    if len(parts) > 1:
+        return f"{parts[-1]}, {' '.join(parts[:-1])}"
+    return matched
+
+
+def prenormalize_title(raw: str, meta: dict) -> str:
+    """
+    Apply synonyms_keywords substitutions to title/subtitle/series — mirrors clean_catalog.py.
+    "Golpo Samagra" → "Galpa Samagra"
+    """
+    result = raw
+    for standard, pattern in meta.get('synonyms_keywords', {}).items():
+        result = re.sub(rf'\b({pattern})\b', standard, result, flags=re.IGNORECASE)
+    return result
+
+
+def prenormalize_publisher(raw: str, meta: dict) -> str:
+    """
+    Apply synonyms_publisher: word-boundary match against variation list → canonical name.
+    Mirrors clean_catalog.py lines 352-355.
+    """
+    for standard, variations in meta.get('synonyms_publisher', {}).items():
+        if any(re.search(rf'\b{re.escape(v)}\b', raw, flags=re.IGNORECASE) for v in variations):
+            return standard
+    return raw
+
+
+def prenormalize_place(raw: str, meta: dict) -> str:
+    """
+    Apply synonyms_place: exact case-insensitive match against variations list.
+    Mirrors clean_catalog.py lines 402-406.
+    """
+    raw_lower = raw.lower()
+    for standard, variations in meta.get('synonyms_place', {}).items():
+        if raw_lower in [v.lower() for v in variations]:
+            return standard
+    return raw
+
+
+def prenormalize_subject(raw: str, meta: dict) -> str:
+    """
+    Apply synonyms_subject: word-boundary regex match → canonical heading.
+    Mirrors clean_catalog.py lines 561-565.
+    """
+    for standard, variations in meta.get('synonyms_subject', {}).items():
+        if any(re.search(rf'\b{re.escape(v)}\b', raw, flags=re.IGNORECASE) for v in variations):
+            return standard
+    return raw
+
+
+def prenormalize_series(raw: str, author_pre_invert: str, meta: dict) -> str:
+    """
+    Apply synonyms_keywords to series text, then apply series_overrides keyed by
+    "SeriesTitle|AuthorName" (author before inversion, matching clean_catalog.py line 446).
+    """
+    normalized = prenormalize_title(raw, meta)
+    key = f"{normalized}|{author_pre_invert}"
+    return meta.get('series_overrides', {}).get(key, normalized)
+
+
+def load_session(sid: str) -> dict | None:
+    p = session_path(sid)
+    if not p.exists():
+        return None
+    return json.loads(p.read_text(encoding='utf-8'))
+
+
+def save_session(sid: str, data: dict):
+    session_path(sid).write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8'
+    )
+
+
+# ── Auth decorator ────────────────────────────────────────────────────────
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get('auth'):
+            return redirect(url_for('login', next=request.path))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# ── File parsing ───────────────────────────────────────────────────────────
+def parse_upload(filepath: str) -> list[list]:
+    """
+    Parse an uploaded XLSX or CSV into a list of rows (each row = list of 40+ values).
+    Returns rows as lists of strings; pads to at least 40 columns.
+    """
+    path = Path(filepath)
+    if path.suffix.lower() in ('.xlsx', '.xls'):
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+        ws = wb.active
+        rows = []
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i == 0:
+                continue  # skip header
+            vals = [str(v).strip() if v is not None else '' for v in row]
+            # Pad to 40 columns
+            while len(vals) < 40:
+                vals.append('')
+            rows.append(vals)
+        wb.close()
+    else:
+        import csv
+        rows = []
+        with open(filepath, newline='', encoding='utf-8-sig') as f:
+            reader = csv.reader(f)
+            for i, row in enumerate(reader):
+                if i == 0:
+                    continue
+                vals = [v.strip() for v in row]
+                while len(vals) < 40:
+                    vals.append('')
+                rows.append(vals)
+    return [r for r in rows if any(v for v in r)]  # drop fully blank rows
+
+
+def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
+    """
+    Convert raw XLSX rows to review-ready dicts with initial dedup status.
+    Author and title are pre-normalized (synonym + inversion) so the review
+    screen shows canonical values matching what clean_catalog.py will produce.
+    """
+    meta   = load_meta()
+    # Added-author column indices (cols 19–24) — must match clean_catalog.py COL_ADDED_AUTHORS
+    COL_ADDED_AUTHORS = [19, 20, 21, 22, 23, 24]
+    # Subject column indices (cols 14–18)
+    COL_SUBJECTS_LIST = [14, 15, 16, 17, 18]
+    COL_SUBTITLE_IDX  = 4
+    COL_SERIES_IDX    = 12
+
+    review = []
+    for idx, cols in enumerate(raw_rows):
+        cols = list(cols)   # make mutable copy before normalizing
+
+        # Clean raw cell values before any normalization
+        cols[COL_ISBN] = clean_isbn(cols[COL_ISBN])
+        cols[COL_YEAR] = clean_year(cols[COL_YEAR])
+
+        isbn = cols[COL_ISBN]
+
+        # Author: synonym match + inversion (save raw pre-invert form for series key)
+        raw_author_pre_invert = cols[COL_AUTHOR]
+        author    = prenormalize_author(raw_author_pre_invert, meta)
+        title     = prenormalize_title(cols[COL_TITLE], meta)
+        publisher = prenormalize_publisher(cols[COL_PUBLISHER], meta)
+        year      = cols[COL_YEAR]
+
+        # Write normalized primary fields back into cols
+        cols[COL_AUTHOR]    = author
+        cols[COL_TITLE]     = title
+        cols[COL_PUBLISHER] = publisher
+
+        # Subtitle (col 4) — synonyms_keywords
+        cols[COL_SUBTITLE_IDX] = prenormalize_title(cols[COL_SUBTITLE_IDX], meta)
+
+        # Place (col 7) — synonyms_place
+        cols[COL_PLACE] = prenormalize_place(cols[COL_PLACE], meta)
+
+        # Series (col 12) — synonyms_keywords + series_overrides
+        cols[COL_SERIES_IDX] = prenormalize_series(
+            cols[COL_SERIES_IDX], raw_author_pre_invert, meta
+        )
+
+        # Subjects (cols 14–18) — synonyms_subject
+        for ci in COL_SUBJECTS_LIST:
+            if ci < len(cols) and cols[ci]:
+                cols[ci] = prenormalize_subject(cols[ci], meta)
+
+        # Added authors (cols 19–24) — same synonym + inversion as primary author
+        for ci in COL_ADDED_AUTHORS:
+            if ci < len(cols) and cols[ci]:
+                cols[ci] = prenormalize_author(cols[ci], meta)
+
+        dup = lookup_dup(isbn, title, author)
+        fuzzy_score = None   # initialise so every branch can safely reference it
+        if not title and not author:
+            status      = 'ERROR'
+            action      = 'skip'
+            dup_barcode = dup_title = None
+        elif dup and not dup['fuzzy']:
+            status      = 'DUPLICATE'
+            dup_barcode = dup['barcode']
+            dup_title   = dup.get('title_display') or dup['title_norm']
+            action      = next_copy_action(dup.get('copies', 1))
+        elif dup and dup['fuzzy']:
+            status      = 'FUZZY'
+            dup_barcode = dup['barcode']
+            dup_title   = dup.get('title_display') or dup['title_norm']
+            fuzzy_score = dup.get('fuzzy_score')
+            action      = 'review'  # force reviewer to make an explicit choice
+        else:
+            status      = 'NEW'
+            action      = 'skip'
+            dup_barcode = dup_title = fuzzy_score = None
+
+        review.append({
+            'idx':         idx,
+            'status':      status,
+            'action':      action,
+            'dup_barcode': dup_barcode,
+            'dup_title':   dup_title,
+            'fuzzy_score': fuzzy_score,
+            'isbn':        isbn,
+            'title':       title,
+            'author':      author,
+            'year':        year,
+            'publisher':   publisher,
+            'cols':        cols,
+        })
+    return review
+
+
+# ── Koha import ────────────────────────────────────────────────────────────
+def import_to_koha(mrc_path: str) -> tuple[bool, str]:
+    """
+    Try to import MARC file directly via bulkmarcimport.pl on the Koha server.
+    Returns (success, message).
+    """
+    import shutil
+    if not shutil.which('koha-shell'):
+        return False, 'koha-shell not found — not running on the Koha server.'
+    try:
+        cmd = [
+            'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
+            f'bulkmarcimport.pl -b -file {shlex.quote(str(mrc_path))}'
+            f' -match {shlex.quote(KOHA_MATCH_RULE)} -insert -update -items'
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True,
+                               stdin=subprocess.DEVNULL, timeout=180)
+        if result.returncode == 0:
+            return True, result.stdout or 'Import completed.'
+        return False, f'Import exited {result.returncode}:\n{result.stderr}'
+    except FileNotFoundError:
+        return False, 'koha-shell not found — not running on the Koha server.'
+    except subprocess.TimeoutExpired:
+        return False, 'Import timed out after 3 minutes.'
+    except Exception as exc:
+        return False, str(exc)
+
+
+# ── CSRF protection ────────────────────────────────────────────────────────
+def _get_csrf_token() -> str:
+    """Return (creating if needed) the per-session CSRF token."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(16)
+    return session['csrf_token']
+
+def _validate_csrf():
+    """Abort 403 if the submitted CSRF token doesn't match the session."""
+    token = (request.form.get('csrf_token') or
+             request.headers.get('X-CSRF-Token', ''))
+    if not token or token != session.get('csrf_token'):
+        from flask import abort
+        abort(403, 'Invalid or missing CSRF token.')
+
+# Make csrf_token() callable from every Jinja template
+app.jinja_env.globals['csrf_token'] = _get_csrf_token
+
+
+# ── Login rate limiting ────────────────────────────────────────────────────
+_login_failures: dict = {}   # ip -> [count, first_failure_timestamp]
+_MAX_FAILURES    = 5
+_LOCKOUT_SECONDS = 900        # 15 minutes
+
+def _is_rate_limited(ip: str) -> bool:
+    entry = _login_failures.get(ip)
+    if not entry:
+        return False
+    count, since = entry
+    if time.time() - since > _LOCKOUT_SECONDS:
+        del _login_failures[ip]
+        return False
+    return count >= _MAX_FAILURES
+
+def _record_login_failure(ip: str):
+    entry = _login_failures.get(ip)
+    if entry and time.time() - entry[1] <= _LOCKOUT_SECONDS:
+        entry[0] += 1
+    else:
+        _login_failures[ip] = [1, time.time()]
+
+def _clear_login_failures(ip: str):
+    _login_failures.pop(ip, None)
+
+
+# ── Disk cleanup ───────────────────────────────────────────────────────────
+_last_cleanup: float = 0.0
+
+def _cleanup_old_files():
+    """Delete uploads/outputs/sessions older than 7 days, and stale temp dirs."""
+    global _last_cleanup
+    now = time.time()
+    if now - _last_cleanup < 86400:   # run at most once per 24 h
+        return
+    _last_cleanup = now
+    cutoff      = now - 7 * 86400    # 7-day retention for user data
+    cutoff_tmp  = now - 86400         # 1-day retention for temp dirs
+    for directory in (UPLOADS_DIR, OUTPUT_DIR, SESSIONS_DIR):
+        for p in directory.iterdir():
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink(missing_ok=True)
+            except Exception:
+                pass
+    tmp = Path(tempfile.gettempdir())
+    for p in tmp.glob('catalog_run_*'):
+        try:
+            if p.stat().st_mtime < cutoff_tmp:
+                shutil.rmtree(str(p), ignore_errors=True)
+        except Exception:
+            pass
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    ip = request.remote_addr or '0.0.0.0'
+    if request.method == 'POST':
+        if _is_rate_limited(ip):
+            flash('Too many failed attempts — please wait 15 minutes.')
+            return render_template('login.html'), 429
+        _validate_csrf()
+        if request.form.get('password') == CATALOG_PASSWORD:
+            _clear_login_failures(ip)
+            session['auth'] = True
+            session.permanent = True
+            return redirect(request.args.get('next') or url_for('index'))
+        _record_login_failure(ip)
+        flash('Incorrect password.')
+    return render_template('login.html')
+
+
+@app.route('/health')
+def health():
+    """Uptime / readiness probe — no auth required."""
+    try:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            conn.execute('SELECT 1 FROM books LIMIT 1')
+        db_ok = True
+    except Exception:
+        db_ok = False
+    status = 200 if db_ok else 503
+    return jsonify(status='ok' if db_ok else 'degraded', db=db_ok), status
+
+
+@app.route('/heartbeat')
+@login_required
+def heartbeat():
+    """Touch the session to keep auth cookie alive; called by review page JS."""
+    return jsonify(ok=True)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+@app.route('/')
+@login_required
+def index():
+    return render_template('upload.html')
+
+
+@app.route('/upload', methods=['POST'])
+@login_required
+def upload():
+    _validate_csrf()
+    _cleanup_old_files()   # opportunistic daily cleanup
+    f = request.files.get('file')
+    if not f or not f.filename:
+        flash('Please select a file.')
+        return redirect(url_for('index'))
+
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ('.xlsx', '.xls', '.csv'):
+        flash('Only .xlsx / .xls / .csv files are accepted.')
+        return redirect(url_for('index'))
+
+    sid = str(uuid.uuid4())[:8]
+    save_path = str(UPLOADS_DIR / f'{sid}{ext}')
+    f.save(save_path)
+
+    try:
+        raw_rows = parse_upload(save_path)
+    except Exception as exc:
+        flash(f'Could not parse file: {exc}')
+        return redirect(url_for('index'))
+
+    if not raw_rows:
+        flash('File appears to be empty or has no data rows.')
+        return redirect(url_for('index'))
+
+    rows = build_review_rows(raw_rows, f.filename)
+    save_session(sid, {
+        'filename':    f.filename,
+        'upload_path': save_path,
+        'uploaded_at': datetime.now().isoformat(),
+        'rows':        rows,
+        'result':      None,
+    })
+
+    return redirect(url_for('review', sid=sid))
+
+
+@app.route('/review/<sid>')
+@login_required
+def review(sid):
+    data = load_session(sid)
+    if not data:
+        flash('Session not found — please re-upload.')
+        return redirect(url_for('index'))
+    return render_template('review.html', sid=sid, rows=data['rows'],
+                           filename=data['filename'])
+
+
+@app.route('/api/dedup')
+@login_required
+def api_dedup():
+    """AJAX endpoint: check a single title/author/isbn against the registry."""
+    isbn   = request.args.get('isbn', '')
+    title  = request.args.get('title', '')
+    author = request.args.get('author', '')
+    dup = lookup_dup(isbn, title, author)
+    if dup and not dup['fuzzy']:
+        return jsonify(status='DUPLICATE',
+                       dup_barcode=dup['barcode'],
+                       dup_title=dup.get('title_display') or dup['title_norm'],
+                       next_action=next_copy_action(dup.get('copies', 1)))
+    if dup and dup['fuzzy']:
+        return jsonify(status='FUZZY',
+                       dup_barcode=dup['barcode'],
+                       dup_title=dup.get('title_display') or dup['title_norm'],
+                       fuzzy_score=dup.get('fuzzy_score'),
+                       next_action='review')
+    if not title.strip() and not author.strip():
+        return jsonify(status='ERROR', dup_barcode=None, dup_title=None, next_action=None)
+    return jsonify(status='NEW', dup_barcode=None, dup_title=None, next_action=None)
+
+
+@app.route('/api/book')
+@login_required
+def api_book():
+    """Return full registry details for a book identified by its primary barcode."""
+    barcode = request.args.get('barcode', '').strip()
+    if not barcode:
+        return jsonify(error='No barcode'), 400
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            'SELECT isbn, title_display, title_norm, author_display, author_norm, '
+            'publisher, year, barcode, copies, added_at, source_file FROM books WHERE barcode=?',
+            (barcode,)
+        ).fetchone()
+    if not row:
+        return jsonify(error='Not found'), 404
+    r = dict(row)
+    title  = r.get('title_display')  or r.get('title_norm',  '').title()
+    author = r.get('author_display') or r.get('author_norm', '').title()
+    # Build list of all known barcodes for this book
+    prefix = barcode[:2]            # e.g. "10"
+    suffix = barcode[2:]            # e.g. "0045"
+    copies_list = []
+    copy_labels = {'10': 'Copy 1', '11': 'Copy 2', '12': 'Copy 3', '13': 'Copy 4'}
+    for p, label in copy_labels.items():
+        bc = p + suffix
+        # primary barcode is stored; copies are derived
+        copies_list.append({'label': label, 'barcode': bc,
+                             'is_primary': p == '10'})
+    copies_list = copies_list[:r.get('copies', 1)]
+    return jsonify(
+        title=title, author=author,
+        isbn=r.get('isbn') or '',
+        publisher=r.get('publisher') or '',
+        year=r.get('year') or '',
+        copies=r.get('copies', 1),
+        copies_list=copies_list,
+        added_at=(r.get('added_at') or '')[:10],
+        source_file=r.get('source_file') or '',
+    )
+
+
+@app.route('/process/<sid>', methods=['POST'])
+@login_required
+def process(sid):
+    _validate_csrf()
+    data = load_session(sid)
+    if not data:
+        flash('Session expired — please re-upload.')
+        return redirect(url_for('index'))
+
+    row_count = int(request.form.get('row_count', 0))
+
+    # Rebuild rows from form (user may have edited title/author/isbn)
+    new_rows  = []
+    copy_rows = []
+
+    for i in range(row_count):
+        status    = request.form.get(f'status_{i}', 'NEW')
+        action    = request.form.get(f'action_{i}', 'skip')
+        title     = request.form.get(f'title_{i}',     '').strip()
+        author    = request.form.get(f'author_{i}',    '').strip()
+        isbn      = request.form.get(f'isbn_{i}',      '').strip()
+        year      = request.form.get(f'year_{i}',      '').strip()
+        publisher = request.form.get(f'publisher_{i}', '').strip()
+        dup_bc    = request.form.get(f'dup_barcode_{i}', '')
+
+        # Rebuild the full 40-column list with user edits applied
+        cols = list(data['rows'][i]['cols']) if i < len(data['rows']) else [''] * 40
+        cols[COL_ISBN]      = isbn
+        cols[COL_AUTHOR]    = author
+        cols[COL_TITLE]     = title
+        if year:      cols[COL_YEAR]      = year
+        if publisher: cols[COL_PUBLISHER] = publisher
+        # Clear copy trigger columns for all rows (will be set only for copy rows)
+        cols[COL_COPY2] = ''
+        cols[COL_COPY3] = ''
+        cols[COL_COPY4] = ''
+
+        row_meta = {
+            'idx':         i,
+            'title':       title,
+            'author':      author,
+            'isbn':        isbn,
+            'edition':     cols[COL_EDITION],
+            'year':        year      or cols[COL_YEAR],
+            'publisher':   publisher or cols[COL_PUBLISHER],
+            'place':       cols[COL_PLACE],
+            'call_no':     cols[COL_CALL_NO],
+            'item_type':   cols[COL_ITEM_TYPE],
+            'ccode':       cols[COL_COLLECTION],
+            'cost':        cols[COL_COST],
+            'home_branch': cols[COL_BRANCH_HOME],
+            'hold_branch': cols[COL_BRANCH_HOLD],
+            'date':        cols[COL_DATE],
+            'dup_barcode': dup_bc,
+        }
+
+        if status == 'ERROR':
+            continue  # blocked by front-end, but skip defensively
+
+        if status in ('NEW', 'FUZZY_NEW'):
+            # FUZZY_NEW = user decided the fuzzy match is wrong; treat as a new book
+            new_rows.append({'cols': cols, 'meta': row_meta})
+
+        elif status in ('DUPLICATE', 'FUZZY'):
+            if action in ('copy2', 'copy3', 'copy4'):
+                # Derive copy barcode from stored primary barcode
+                if dup_bc and len(dup_bc) >= 4:
+                    prefix = COPY_PREFIX[action]
+                    copy_bc = prefix + dup_bc[2:]
+                    copy_num = {'copy2': 2, 'copy3': 3, 'copy4': 4}[action]
+                    copy_rows.append({'cols': cols, 'meta': row_meta,
+                                      'action': action, 'copy_bc': copy_bc,
+                                      'copy_num': copy_num})
+            # else: action == 'skip', do nothing
+
+    if not new_rows and not copy_rows:
+        flash('Nothing to process — all rows were skipped or had errors.')
+        return redirect(url_for('review', sid=sid))
+
+    # ── Process new books ─────────────────────────────────────────────────
+    mrc_bytes      = b''
+    audit_path     = None
+    errors_path    = None
+    new_book_count = 0
+    skipped_reg    = 0
+    engine_errors  = ''
+
+    if new_rows:
+        tmp_xlsx = tempfile.NamedTemporaryFile(
+            suffix='.xlsx', delete=False, dir=str(UPLOADS_DIR), prefix=f'{sid}_new_'
+        )
+        tmp_xlsx.close()
+        _write_xlsx(new_rows, tmp_xlsx.name)
+
+        eng_result = catalog_engine.run(tmp_xlsx.name)
+        engine_errors = eng_result.get('stderr', '')
+
+        if eng_result['success'] and eng_result['mrc']:
+            with open(eng_result['mrc'], 'rb') as f:
+                mrc_bytes = f.read()
+            audit_path  = eng_result['audit']
+            errors_path = eng_result['errors']
+
+            # Register processed books in dedup registry
+            if audit_path:
+                processed = catalog_engine.extract_processed_books(audit_path)
+                skipped_reg, reg_warnings = register_books(processed, data['filename'])
+                new_book_count = len(processed)
+                if reg_warnings:
+                    engine_errors = (engine_errors + '\n' + reg_warnings).strip()
+
+            # Copy audit/error files to persistent output dir, then remove temp dir
+            if audit_path:
+                dest = str(OUTPUT_DIR / f'{sid}_audit.xlsx')
+                shutil.copy2(audit_path, dest)
+                audit_path = dest
+            if errors_path:
+                dest = str(OUTPUT_DIR / f'{sid}_errors.xlsx')
+                shutil.copy2(errors_path, dest)
+                errors_path = dest
+            if eng_result.get('out_dir'):
+                shutil.rmtree(eng_result['out_dir'], ignore_errors=True)
+
+    # ── Process copies (atomic: FileLock + SQLite EXCLUSIVE tx) ──────────────
+    # Re-derives the copy number from the current DB state inside the lock so
+    # that two concurrent /process requests can never assign the same barcode.
+    try:
+        from filelock import FileLock as _FileLock
+    except ImportError:
+        class _FileLock:                           # no-op fallback
+            def __init__(self, p, timeout=60): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): pass
+
+    copy_count = 0
+    for cr in copy_rows:
+        try:
+            meta = cr['meta']
+            isbn_clean = clean_isbn(meta.get('isbn') or '')
+            nt = normalize(meta['title'])
+            na = normalize_author(meta['author'])
+            dup_bc = meta.get('dup_barcode', '') or ''
+            if not dup_bc or len(dup_bc) < 4:
+                engine_errors += f'\nRow {meta["idx"]}: no primary barcode — skipped copy'
+                continue
+
+            with _FileLock(catalog_engine.LOCK_FILE, timeout=60):
+                with sqlite3.connect(str(DB_PATH), timeout=10) as conn:
+                    conn.execute('BEGIN EXCLUSIVE')
+                    if isbn_clean:
+                        row = conn.execute(
+                            'SELECT copies FROM books WHERE isbn=?', (isbn_clean,)
+                        ).fetchone()
+                    else:
+                        row = conn.execute(
+                            'SELECT copies FROM books WHERE title_norm=? AND author_norm=?',
+                            (nt, na)
+                        ).fetchone()
+
+                    current = row[0] if row else 1
+                    next_num = current + 1
+                    _prefix_map = {2: '11', 3: '12', 4: '13'}
+                    if next_num not in _prefix_map:
+                        engine_errors += (
+                            f'\nRow {meta["idx"]}: already has {current} copies (max 4) — skipped'
+                        )
+                        continue
+
+                    actual_copy_bc = _prefix_map[next_num] + dup_bc[2:]
+
+                    copy_marc = catalog_engine.generate_copy_marc(meta, actual_copy_bc, next_num)
+                    mrc_bytes += copy_marc
+
+                    if isbn_clean:
+                        conn.execute('UPDATE books SET copies=copies+1 WHERE isbn=?', (isbn_clean,))
+                    else:
+                        conn.execute(
+                            'UPDATE books SET copies=copies+1 '
+                            'WHERE title_norm=? AND author_norm=?', (nt, na)
+                        )
+            copy_count += 1
+        except Exception as exc:
+            engine_errors += f'\nCopy error row {cr["meta"]["idx"]}: {exc}'
+
+    # ── Save merged MARC ──────────────────────────────────────────────────
+    mrc_out_path = None
+    if mrc_bytes:
+        mrc_out_path = str(OUTPUT_DIR / f'{sid}.mrc')
+        with open(mrc_out_path, 'wb') as f:
+            f.write(mrc_bytes)
+
+    # ── Attempt Koha import ───────────────────────────────────────────────
+    import_ok  = False
+    import_msg = ''
+    if mrc_out_path:
+        import_ok, import_msg = import_to_koha(mrc_out_path)
+
+    # ── Save result to session ────────────────────────────────────────────
+    data['result'] = {
+        'new_books':     new_book_count,
+        'already_in_registry': skipped_reg,
+        'copies_added':  copy_count,
+        'skipped':       sum(1 for i in range(row_count)
+                             if request.form.get(f'status_{i}') in ('DUPLICATE', 'FUZZY')
+                             and request.form.get(f'action_{i}', 'skip') == 'skip'),
+        'errors':        sum(1 for i in range(row_count)
+                             if request.form.get(f'status_{i}') == 'ERROR'),
+        'mrc_path':      mrc_out_path,
+        'audit_path':    audit_path,
+        'errors_path':   errors_path,
+        'import_ok':     import_ok,
+        'import_msg':    import_msg,
+        'engine_errors': engine_errors,
+    }
+    save_session(sid, data)
+
+    return redirect(url_for('result', sid=sid))
+
+
+@app.route('/result/<sid>')
+@login_required
+def result(sid):
+    data = load_session(sid)
+    if not data or not data.get('result'):
+        flash('No result found.')
+        return redirect(url_for('index'))
+    return render_template('result.html', sid=sid,
+                           filename=data['filename'], r=data['result'])
+
+
+@app.route('/download/<sid>/<filetype>')
+@login_required
+def download(sid, filetype):
+    data = load_session(sid)
+    if not data or not data.get('result'):
+        return 'Session not found', 404
+
+    r = data['result']
+    paths = {
+        'mrc':    r.get('mrc_path'),
+        'audit':  r.get('audit_path'),
+        'errors': r.get('errors_path'),
+    }
+    path = paths.get(filetype)
+    if not path or not os.path.exists(path):
+        return 'File not found', 404
+
+    return send_file(path, as_attachment=True,
+                     download_name=Path(path).name)
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+def _write_xlsx(rows: list, out_path: str):
+    """Write a list of {'cols': [...40 values...]} to an XLSX file clean_catalog.py can read."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    # Write a minimal header row matching Gronthee column names
+    headers = [
+        'ISBN', 'Language', 'Author', 'Title', 'Sub Title', 'Other Title',
+        'Edition', 'Publication Place', 'Publisher', 'Published Year',
+        'Page Count', 'other physical details', 'Series', 'Note Area',
+        'Category', 'Genre', 'Subject 3', 'Subject 4', 'Subject 5',
+        'Second Author', 'Third Column', 'Editor', 'Compiler',
+        'Translator', 'Illustrator', 'Item Type', 'Status', 'Collection',
+        'Home Branch', 'Holding Branch', 'Shelving Location', 'Scan Date',
+        'Source of Aquisition', 'Cost, normal purchase price',
+        'Call No', 'BarCode', 'Public Note', 'Second Copy',
+        'Third Copy', 'Fourth Copy',
+    ]
+    ws.append(headers)
+    for row_obj in rows:
+        ws.append(row_obj['cols'][:40])
+    wb.save(out_path)
+
+
+if __name__ == '__main__':
+    app.run(debug=False, port=5050)

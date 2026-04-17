@@ -609,6 +609,8 @@ for row_num, (index, row) in enumerate(df.iterrows()):
 
     # 952 — Item (holdings) builder
     def add_item_to_marc(barcode_val):
+        # Derive copy number from barcode prefix: 10→1, 11→2, 12→3, 13→4
+        copy_t = str(int(barcode_val[:2]) - 9) if barcode_val[:2].isdigit() else '1'
         subfields_952 = [
             Subfield(code='a', value=home_branch),
             Subfield(code='b', value=hold_branch),
@@ -616,6 +618,7 @@ for row_num, (index, row) in enumerate(df.iterrows()):
             Subfield(code='o', value=call_no),
             Subfield(code='d', value=date_clean),
             Subfield(code='y', value=final_itype),
+            Subfield(code='t', value=copy_t),
         ]
         if collection_code:
             subfields_952.append(Subfield(code='8', value=collection_code))

@@ -1,0 +1,253 @@
+{
+    "last_primary_barcode": 109157,
+    "synonyms_publisher": {
+        "Ananda Publishers": [
+            "ananda",
+            "anondo"
+        ],
+        "Mitra & Ghosh Publishers Pvt. Ltd.": [
+            "mitra & ghosh",
+            "mitra and ghosh",
+            "mitra ghosh"
+        ],
+        "Dey's Publishing": [
+            "dey's publishing",
+            "deys publishing"
+        ],
+        "Sahitya Sansad": [
+            "sansad",
+            "samsad",
+            "sahitya sansad"
+        ],
+        "Visva-Bharati": [
+            "visva",
+            "viswa",
+            "vishwa",
+            "vishwabharati",
+            "biswa bharati"
+        ],
+        "M.C. Sarkar & Sons Pvt. Ltd.": [
+            "m.c. sarkar",
+            "mc sarkar",
+            "sarkar & sons",
+            "sarkar and sons"
+        ]
+    },
+    "synonyms_author": {
+        "Rabindranath Tagore": [
+            "rabindranath tagore",
+            "rabindranath thakur",
+            "rabindra nath"
+        ],
+        "Ashapurna Devi": [
+            "ashapurna devi",
+            "ashapurna debi",
+            "ashapura"
+        ],
+        "Jibanananda Das": [
+            "jibanananda das",
+            "jibanananda dash"
+        ],
+        "Bibhutibhushan Bandyopadhyay": [
+            "bibhutibhushan bandyopadhyay",
+            "bibhutibhusan bandopadhyay",
+            "bibhutibhushan bandopadhyay",
+            "bibhubhusan bandyopadhyay",
+            "bibhubhusan bandopadhyay",
+            "vibhutibhushan bandyopadhyay",
+            "bivhutibhushan bandopadhyay"
+        ],
+        "Sunil Gangopadhyay": [
+            "sunil ganguly",
+            "sunil gangopadhyaya",
+            "sunil ganguli"
+        ],
+        "Sarat Chandra Chattopadhyay": [
+            "sarat chandra chattopadhyay",
+            "sarat chandra",
+            "sharatchandra",
+            "sharat chandra",
+            "sharoto chandra"
+        ],
+        "Banaful": [
+            "banaful",
+            "bonophool",
+            "bonoful",
+            "balaichand mukhopadhyay"
+        ],
+        "Abanindranath Tagore": [
+            "abanindranath tagore",
+            "abanindranath thakur"
+        ],
+        "Sripantha": [
+            "sri pantha",
+            "sri pantho",
+            "sripantho",
+            "sripantha"
+        ],
+        "Das Gupta, Meenakshi": [
+            "meenakshi das gupta"
+        ],
+        "Roy Chowdhury, Upendra Kishore": [
+            "upendra kishor roy chowdhury",
+            "upendra kishor roy chowsfuri",
+            "upendrakishor roy chowdhury",
+            "upendrakishore ray chaudhuri",
+            "upendrakishore roychowdhury"
+        ],
+        "Mitra Majumdar, Dakhinaranjan": [
+            "dakhinaranjan mitra majumdar",
+            "dakshinaranjan mitra majumdar",
+            "dhakhina ranjan mitra majumdar"
+        ],
+        "Sen Gupta, Subhadra": [
+            "subhadra sen gupta"
+        ],
+        "Das Chowdhury, Bandana": [
+            "bandana das chowdhury"
+        ],
+        "Deb Sen, Nabaneeta": [
+            "nabaneeta deb sen",
+            "nabanita deb sen",
+            "navnita dev sen",
+            "nabanita dev sen"
+        ],
+        "Lahiri Chowdhury, Dhritikanta": [
+            "dhritikanta lahiri chowdhury"
+        ],
+        "Guha Ray, Siddhartha": [
+            "siddhartha guha ray"
+        ],
+        "Rakshit Ray, Bhupendrakishor": [
+            "bhupendrakishor rakshit ray"
+        ],
+        "Reza Chowdhury, Alamgir": [
+            "alamgir reza chowdhury",
+            "alamgir reja chowdhuri"
+        ],
+        "Chowdhurani, Indira Devi": [
+            "indira devi chowdhurani"
+        ],
+        "Chowdhurani, Renuka Devi": [
+            "renuka debi chowdhurani",
+            "renuka devi chowdhurani"
+        ],
+        "Kiriti": [
+            "kiritto"
+        ]
+    },
+    "synonyms_keywords": {
+        "Galpa": "golpo",
+        "Samagra": "somogro",
+        "Rachanabali": "rochonaboli|rachonabali",
+        "Pratham": "prothom",
+        "Tanaya": "tonoya",
+        "Ajanta": "ojonta",
+        "Satabarsha": "shotoborsho",
+        "Subarnalata": "shubarnalata",
+        "Sera": "shera",
+        "Sonar": "shonar",
+        "Satyajit": "shatyajit",
+        "Biswas": "bishwas",
+        "Teen": "tin",
+        "Teeney": "tiney",
+        "Ekey": "akey",
+        "Kailashe": "koilashey|kailashey",
+        "Pratisruti": "protishruti|protisruti",
+        "Ghanada": "ghonada",
+        "Jnan Gamyi": "jnangomyi|jnangamyi",
+        "Double": "dubol",
+        "Sangraha": "sangrah|sangrahoa",
+        "Sahitya": "sohitya|sahitto",
+        "Rachana": "rochona|rochonar",
+        "Katha": "kotha|kothoa",
+        "Kobita": "kabita|kavita|kobito",
+        "Itihas": "itihash|itihos",
+        "Granthabali": "granthaboli|granthoboli",
+        "Kahini": "kahani|kohini",
+        "Smriti": "smroti|smoroti|smritti",
+        "Ekanka": "ekonko",
+        "Sharat": "sarat|sharoto",
+        "Bibhuti": "vibhuti|bivhuti",
+        "Bharat": "bharot",
+        "Bangla": "bengla|banglo",
+        "Kiriti": "kiritto",
+        "Natya": "notya"
+    },
+    "series_overrides": {
+        "Subarnalata|Ashapurna Devi": "Satyabati Trilogy",
+        "Prothom Protisruti|Ashapurna Devi": "Satyabati Trilogy",
+        "Bokul Kotha|Ashapurna Devi": "Satyabati Trilogy",
+        "Bokul Katha|Ashapurna Devi": "Satyabati Trilogy",
+        "Sonar Kella|Satyajit Ray": "Feluda Series",
+        "Baksha Rahasya|Satyajit Ray": "Feluda Series"
+    },
+    "synonyms_place": {
+        "Kolkata": [
+            "kolakata",
+            "kolklata",
+            "kolkota",
+            "kolkata"
+        ],
+        "Dhaka, Bangladesh": [
+            "dhaka, banagladesh",
+            "dhaka, bangladsh"
+        ]
+    },
+    "synonyms_subject": {
+        "Fiction": [
+            "golpo",
+            "galpa",
+            "fiction",
+            "upanyas",
+            "novel"
+        ],
+        "Poetry": [
+            "kobita",
+            "kavita",
+            "poem",
+            "poetry",
+            "kavitaguchha"
+        ],
+        "Biography": [
+            "biography",
+            "jiboni",
+            "jeebon",
+            "jiban",
+            "jibancharit"
+        ],
+        "Non-Fiction": [
+            "nonfiction",
+            "non fiction",
+            "non-fiction",
+            "prabandha",
+            "probondho"
+        ],
+        "Children": [
+            "children",
+            "sishu",
+            "shishu",
+            "kids",
+            "balsahitya"
+        ],
+        "Drama": [
+            "drama",
+            "natak",
+            "natok"
+        ],
+        "Travel": [
+            "travel",
+            "bhraman",
+            "bhromon"
+        ],
+        "Essays": [
+            "essay",
+            "essays",
+            "rachana",
+            "rochona",
+            "prabandha"
+        ]
+    },
+    "fuzzy_author_threshold": 88,
+    "previous_last_primary_barcode": 109125
+}

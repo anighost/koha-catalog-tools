@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dishari Catalog{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    /* ── Design tokens (matches disharifoundation.org) ─────── */
+    :root {
+      --crimson:    #CB5051;
+      --crimson-dk: #a83d3d;
+      --text:       #2c2c2c;
+      --text-muted: #666;
+      --border:     #e0e0e0;
+      --bg:         #f7f7f7;
+      --surface:    #ffffff;
+      --shadow-sm:  0 1px 4px rgba(0,0,0,0.07);
+      --shadow-md:  0 4px 16px rgba(0,0,0,0.10);
+      --radius:     10px;
+    }
+
+    /* ── Base ──────────────────────────────────────────────── */
+    body {
+      font-family: 'Poppins', sans-serif;
+      color: var(--text);
+      background-color: #f7f7f7;
+      background-image:
+        linear-gradient(55deg,
+          rgba(208,208,208,.08) 0%, rgba(208,208,208,.08) 20%,
+          rgba(55,55,55,.08)   20%, rgba(55,55,55,.08)   40%,
+          rgba(81,81,81,.08)   40%, rgba(81,81,81,.08)   60%,
+          rgba(208,208,208,.08) 60%, rgba(208,208,208,.08) 80%,
+          rgba(191,191,191,.08) 80%, rgba(191,191,191,.08) 100%),
+        linear-gradient(291deg,
+          rgba(190,190,190,.06) 0%,     rgba(190,190,190,.06) 14.286%,
+          rgba(105,105,105,.06) 14.286%, rgba(105,105,105,.06) 28.572%,
+          rgba(230,230,230,.06) 28.572%, rgba(230,230,230,.06) 42.858%,
+          rgba(216,216,216,.06) 42.858%, rgba(216,216,216,.06) 57.144%,
+          rgba(181,181,181,.06) 57.144%, rgba(181,181,181,.06) 71.43%,
+          rgba(129,129,129,.06) 71.43%,  rgba(129,129,129,.06) 85.716%,
+          rgba(75,75,75,.06)   85.716%,  rgba(75,75,75,.06)   100%),
+        linear-gradient(90deg, #f7f7f7, #f7f7f7);
+      min-height: 100vh;
+    }
+
+    a { color: var(--crimson); }
+    a:hover { color: var(--crimson-dk); }
+
+    /* ── Top identity bar (matches disharifoundation.org) ───── */
+    .site-identity {
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+      padding: 10px 25px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .site-logo-img {
+      height: 34px; width: auto; flex-shrink: 0;
+    }
+    .site-logo-text {
+      display: flex; align-items: center; gap: 0;
+    }
+    .site-title {
+      font-size: 1.05rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--text); white-space: nowrap;
+      padding-right: 12px;
+    }
+    .site-tagline {
+      font-size: 0.78rem; font-weight: 400;
+      font-style: italic; color: var(--text-muted);
+      padding-left: 12px; margin-left: 4px;
+      border-left: 1.5px solid #d0d0d0;
+      white-space: nowrap;
+    }
+    .site-badge {
+      margin-left: auto;
+      font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: #fff;
+      background: linear-gradient(135deg, var(--crimson) 0%, var(--crimson-dk) 100%);
+      border: none;
+      border-radius: 6px; padding: 5px 14px;
+      box-shadow: 0 2px 8px rgba(203,80,81,0.35);
+    }
+
+    /* ── Crimson nav bar ───────────────────────────────────── */
+    .site-nav {
+      background: var(--crimson);
+      border-radius: 0 0 16px 16px;
+      padding: 0 24px;
+      display: flex; align-items: center;
+      box-shadow: 0 4px 12px rgba(203,80,81,0.25);
+      min-height: 42px;
+    }
+    .site-nav a {
+      color: rgba(255,255,255,0.90);
+      text-decoration: none;
+      font-size: 0.78rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 10px 14px;
+      display: inline-block;
+      transition: color 0.15s;
+    }
+    .site-nav a:hover,
+    .site-nav a.active { color: #fff; }
+    .site-nav .nav-right { margin-left: auto; }
+    .site-nav .nav-right a {
+      font-size: 0.72rem; opacity: 0.85;
+    }
+
+    /* ── Page content ──────────────────────────────────────── */
+    .page-body { padding: 28px 24px; }
+
+    /* ── Cards ─────────────────────────────────────────────── */
+    .dfl-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* ── Buttons ───────────────────────────────────────────── */
+    .btn-crimson {
+      background: linear-gradient(to bottom right, var(--crimson), var(--crimson-dk));
+      color: #fff; border: none; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 500;
+      padding: 8px 22px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn-crimson:hover:not(:disabled) {
+      color: #fff; opacity: 0.92; transform: translateY(-1px);
+    }
+    .btn-crimson:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.82rem; font-weight: 500;
+      padding: 7px 20px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover {
+      border-color: var(--crimson); color: var(--crimson);
+    }
+
+    /* Matches disharifoundation.org pub-banner slate style */
+    .btn-dfl {
+      background: linear-gradient(160deg, #3a3a3a 0%, #1a1a1a 60%, #2d2020 100%);
+      color: #fff !important;
+      border: none;
+      border-radius: 20px;
+      font-size: 0.82rem; font-weight: 500;
+      padding: 8px 22px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+    }
+    .btn-dfl:hover:not(:disabled) {
+      background: linear-gradient(160deg, #4a4a4a 0%, #2c2c2c 60%, #3d2828 100%);
+      color: #fff !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.40);
+      transform: translateY(-1px);
+    }
+    .btn-dfl:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Status badges ─────────────────────────────────────── */
+    .status-badge {
+      border-radius: 5px !important;
+      font-size: 0.63rem !important; font-weight: 700 !important;
+      letter-spacing: 0.09em !important;
+      padding: 4px 9px !important;
+      display: inline-block;
+    }
+    .badge-new {
+      background: linear-gradient(135deg, #2e7d6b 0%, #1f5c4f 100%) !important;
+      box-shadow: 0 2px 5px rgba(46,125,107,0.35);
+    }
+    .badge-duplicate {
+      background: linear-gradient(135deg, #c9922a 0%, #a06e18 100%) !important;
+      box-shadow: 0 2px 6px rgba(160,110,24,0.40);
+    }
+    .badge-fuzzy {
+      background: linear-gradient(135deg, #1a7a8a 0%, #115a68 100%) !important;
+      box-shadow: 0 2px 5px rgba(26,122,138,0.35);
+    }
+    .badge-error {
+      background: linear-gradient(135deg, #b92b27 0%, #8e1a17 100%) !important;
+      box-shadow: 0 2px 5px rgba(185,43,39,0.35);
+    }
+
+    /* ── Section title ─────────────────────────────────────── */
+    .section-title {
+      font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-muted);
+      border-left: 3px solid var(--crimson);
+      padding-left: 10px; margin-bottom: 16px;
+    }
+
+    /* ── Flash alerts ──────────────────────────────────────── */
+    .flash-alert {
+      background: #fdf6e3; border: 1px solid #f0d070;
+      border-radius: var(--radius); padding: 10px 16px;
+      font-size: 0.84rem; margin-bottom: 16px;
+    }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    .site-footer {
+      margin-top: 48px;
+      background: #2c2c2c;
+      border-top: 3px solid var(--crimson);
+      border-radius: 20px 20px 0 0;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.75rem;
+      text-align: center;
+      padding: 16px;
+    }
+    .site-footer a { color: rgba(255,255,255,0.6); }
+    .site-footer a:hover { color: var(--crimson); }
+  </style>
+</head>
+<body>
+
+<!-- Identity bar -->
+<div class="site-identity">
+  <img src="{{ url_for('static', filename='images/dishari-logo.png') }}"
+       alt="Dishari Foundation" class="site-logo-img">
+  <div class="site-logo-text">
+    <span class="site-title">Dishari Foundation</span>
+    <span class="site-tagline">In Books We Trust</span>
+  </div>
+  <div class="site-badge">Catalog Tool</div>
+</div>
+
+<!-- Crimson nav -->
+<nav class="site-nav">
+  <a href="{{ url_for('index') }}"
+     class="{% if request.endpoint == 'index' %}active{% endif %}">Upload</a>
+  {% if session.auth %}
+  <div class="nav-right">
+    <a href="{{ url_for('logout') }}">Log out</a>
+  </div>
+  {% endif %}
+</nav>
+
+<!-- Flash messages -->
+<div class="page-body pb-0">
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="flash-alert">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+</div>
+
+<!-- Main content -->
+<div class="page-body">
+  {% block content %}{% endblock %}
+</div>
+
+<!-- Footer -->
+<footer class="site-footer">
+  Dishari Foundation &nbsp;·&nbsp; Catalog Tool &nbsp;·&nbsp;
+  <a href="https://disharifoundation.org">disharifoundation.org</a>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
