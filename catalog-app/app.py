@@ -843,34 +843,47 @@ def add_copy_item_to_koha(dup_barcode: str, copy_barcode: str, copy_num: int, me
 
     try:
         # Build Perl script to add item via Koha API
+        home_branch = meta.get("home_branch", "DFL")
+        hold_branch = meta.get("hold_branch", "DFL")
+        item_type = meta.get("item_type", "BK")
+        call_no = meta.get("call_no", "891")
+        date_str = meta.get("date", "")
+
         perl_script = f"""
 use strict;
 use warnings;
 use Koha::Items;
+use Koha::Item;
 
 # Look up existing item by primary barcode
-my $existing = Koha::Items->find({{ barcode => '{dup_barcode}' }});
+my $existing = Koha::Items->search({{ barcode => '{dup_barcode}' }})->next;
 unless ($existing) {{
-    die "ERROR: No item found with barcode {dup_barcode}\\n";
+    print "ERROR: No item found with barcode {dup_barcode}\\n";
+    exit 1;
 }}
 
 my $biblionumber = $existing->biblionumber;
 my $biblioitemnumber = $existing->biblioitemnumber;
 
 # Create new item with copy barcode
-my $item = Koha::Item->new({{
-    biblionumber => $biblionumber,
-    biblioitemnumber => $biblioitemnumber,
-    barcode => '{copy_barcode}',
-    homebranch => '{meta.get("home_branch", "DFL")}',
-    holdingbranch => '{meta.get("hold_branch", "DFL")}',
-    itype => '{meta.get("item_type", "BK")}',
-    itemcallnumber => '{meta.get("call_no", "891")}',
-    dateaccessioned => '{meta.get("date", "")}',
-    copynumber => {copy_num},
-}})->store;
-
-print "OK\\n";
+eval {{
+    my $item = Koha::Item->new({{
+        biblionumber => $biblionumber,
+        biblioitemnumber => $biblioitemnumber,
+        barcode => '{copy_barcode}',
+        homebranch => '{home_branch}',
+        holdingbranch => '{hold_branch}',
+        itype => '{item_type}',
+        itemcallnumber => '{call_no}',
+        dateaccessioned => '{date_str}',
+        copynumber => {copy_num},
+    }})->store;
+    print "OK\\n";
+}};
+if ($@) {{
+    print "ERROR: $@\\n";
+    exit 1;
+}}
 """
         # Write script to temp file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.pl', delete=False) as f:
