@@ -147,42 +147,15 @@ Set up HTTPS on the origin server for end-to-end encryption (Cloudflare → Apac
 sudo apt-get update
 sudo apt-get install certbot python3-certbot-apache
 
-# Generate certificate
-sudo certbot certonly --standalone -d catalog.disharifoundation.org
-
-# Update Apache vhost to use SSL
-sudo nano /etc/apache2/sites-available/catalog-app.conf
+# Generate certificate and auto-configure Apache
+sudo certbot --apache -d catalog.disharifoundation.org
 ```
 
-Replace the vhost with:
-```apache
-<VirtualHost *:443>
-    ServerName catalog.disharifoundation.org
-    SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/catalog.disharifoundation.org/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/catalog.disharifoundation.org/privkey.pem
-    
-    ProxyPass        / http://127.0.0.1:5050/
-    ProxyPassReverse / http://127.0.0.1:5050/
-</VirtualHost>
-
-# Redirect HTTP to HTTPS
-<VirtualHost *:80>
-    ServerName catalog.disharifoundation.org
-    Redirect permanent / https://catalog.disharifoundation.org/
-</VirtualHost>
-```
-
-Enable SSL module and reload:
-```bash
-sudo a2enmod ssl
-sudo systemctl reload apache2
-```
-
-Auto-renewal (certbot handles this automatically):
-```bash
-sudo systemctl enable certbot.timer
-```
+certbot will:
+- Generate the certificate
+- Automatically update your Apache vhost for SSL
+- Set up HTTP → HTTPS redirect
+- Enable auto-renewal
 
 Status: ⬜ Pending
 
