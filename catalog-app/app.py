@@ -842,7 +842,7 @@ def add_copy_item_to_koha(dup_barcode: str, copy_barcode: str, copy_num: int, me
         return False, 'koha-shell not found — not running on the Koha server.'
 
     try:
-        # Build Perl script to add item via Koha API
+        # Build Perl script to add item via direct SQL
         home_branch = meta.get("home_branch", "DFL")
         hold_branch = meta.get("hold_branch", "DFL")
         item_type = meta.get("item_type", "BK")
@@ -852,38 +852,58 @@ def add_copy_item_to_koha(dup_barcode: str, copy_barcode: str, copy_num: int, me
         perl_script = f"""
 use strict;
 use warnings;
-use Koha::Items;
-use Koha::Item;
+use DBI;
 
-# Look up existing item by primary barcode
-my $existing = Koha::Items->search({{ barcode => '{dup_barcode}' }})->next;
-unless ($existing) {{
+# Read DB config from Koha config
+my $koha_conf = '/etc/koha/sites/dishari_lib/koha-conf.xml';
+my ($host, $db, $user, $pass);
+
+open(my $fh, '<', $koha_conf) or die "Cannot open $koha_conf: $!";
+while (<$fh>) {{
+    $host = $1 if /<hostname>([^<]+)<\/hostname>/;
+    $db = $1 if /<database>([^<]+)<\/database>/;
+    $user = $1 if /<user>([^<]+)<\/user>/;
+    $pass = $1 if /<pass>([^<]+)<\/pass>/;
+}}
+close($fh);
+
+# Connect to MySQL
+my $dbh = DBI->connect("DBI:mysql:$db:$host", $user, $pass)
+    or die "DBI error: $DBI::errstr\\n";
+
+# Look up existing item
+my $sth = $dbh->prepare("SELECT biblionumber, biblioitemnumber FROM items WHERE barcode = ?");
+$sth->execute('{dup_barcode}') or die "Query error: " . $dbh->errstr . "\\n";
+my ($biblionumber, $biblioitemnumber) = $sth->fetchrow_array;
+$sth->finish;
+
+unless (defined $biblionumber) {{
     print "ERROR: No item found with barcode {dup_barcode}\\n";
     exit 1;
 }}
 
-my $biblionumber = $existing->biblionumber;
-my $biblioitemnumber = $existing->biblioitemnumber;
+# Insert new item
+my $insert = $dbh->prepare(qq{{
+    INSERT INTO items
+    (biblionumber, biblioitemnumber, barcode, homebranch, holdingbranch,
+     itype, itemcallnumber, dateaccessioned, copynumber)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+}});
 
-# Create new item with copy barcode
-eval {{
-    my $item = Koha::Item->new({{
-        biblionumber => $biblionumber,
-        biblioitemnumber => $biblioitemnumber,
-        barcode => '{copy_barcode}',
-        homebranch => '{home_branch}',
-        holdingbranch => '{hold_branch}',
-        itype => '{item_type}',
-        itemcallnumber => '{call_no}',
-        dateaccessioned => '{date_str}',
-        copynumber => {copy_num},
-    }})->store;
-    print "OK\\n";
-}};
-if ($@) {{
-    print "ERROR: $@\\n";
-    exit 1;
-}}
+$insert->execute(
+    $biblionumber,
+    $biblioitemnumber,
+    '{copy_barcode}',
+    '{home_branch}',
+    '{hold_branch}',
+    '{item_type}',
+    '{call_no}',
+    '{date_str}',
+    {copy_num}
+) or die "Insert error: " . $dbh->errstr . "\\n";
+
+print "OK\\n";
+$dbh->disconnect;
 """
         # Write script to temp file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.pl', delete=False) as f:
