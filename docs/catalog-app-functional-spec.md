@@ -48,12 +48,13 @@ The catalog app provides: **upload → OCR-error review → duplicate detection 
      │  merges MARC bytes (new books + copy records)
      │  calls bulkmarcimport.pl on Koha server
      │  registers new books in dedup_registry.db
+     │  creates label batch PDF (if import succeeded) via create_label_batch.pl
      ▼
   /result/<sid>
      │  shows: N new books · M copies added · K skipped · W errors
-     │  download buttons: MARC file · audit XLSX · error rows XLSX
+     │  download buttons: MARC file · audit XLSX · error rows XLSX · Labels PDF
      ▼
-  [done — books searchable in Koha OPAC]
+  [done — books searchable in Koha OPAC; labels ready to print]
 ```
 
 ---
@@ -171,7 +172,8 @@ Shows a summary card with counters:
 
 - Koha import status: green "Imported successfully" or amber "Not completed — import manually"
 - Full scrollable import log (no truncation)
-- Download buttons: MARC file (`.mrc`) · Audit spreadsheet · Error rows spreadsheet
+- Download buttons: MARC file (`.mrc`) · Audit spreadsheet · Error rows spreadsheet · Labels PDF (if created)
+- Labels PDF button: visible only when import succeeded; PDF contains barcode spine labels formatted for Avery 5160 sheets using the "Dishari Label" layout (configured via `KOHA_LABEL_TEMPLATE_ID=1` and `KOHA_LABEL_LAYOUT_ID=17`)
 - "Process another file" link back to upload
 
 ---
@@ -270,6 +272,14 @@ Raw XLSX row (40 columns)
         │       validate range 1800 ≤ year ≤ current year → '' if invalid
         │       (mirrors clean_catalog.py exactly; "1993 (reprint)" → "1993")
         │
+        ├── normalize_edition()
+        │       OCR error correction: "!st Ed." → "1st Ed." (scanner misreads 1 as !)
+        │       Ordinal suffix strip: "1st Edition" → "1"
+        │       Word ordinal map: "First Edition" → "1" | "Second" → "2" (supports 1st–10th)
+        │       Noise word removal: "edition", "ed", "eds" stripped
+        │       Result: all variants of an edition normalize to the same canonical form
+        │       (e.g. "1", "1st", "1st Ed", "1st Edition.", "!st Ed.", "First", "First Edition" → "1")
+        │
         ├── prenormalize_author()
         │       Stage 1: synonyms_author exact all-words match (case-insensitive)
         │       Stage 2: rapidfuzz token_sort_ratio fallback at fuzzy_author_threshold
@@ -300,7 +310,7 @@ Raw XLSX row (40 columns)
         │       Full author string is preserved in cols[] for MARC generation
         │
         → lookup_dup(isbn, title, author_for_dedup, edition)  → registry match or None
-        │       edition = cols[COL_EDITION] (col 6) — passed as-is; normalize() applied inside lookup_dup
+        │       edition = cols[COL_EDITION] (col 6) → normalize_edition() applied inside lookup_dup
         │
         → within-upload dedup check (G3) — only when lookup_dup returns None
         │       seen_in_upload dict is maintained across all rows in the call
@@ -340,9 +350,9 @@ The registry always stores ISBN-13 (written by `clean_catalog.py` before the aud
 
 ### Stage 2 — Normalized Title + Author + Edition Exact Match (G1)
 ```python
-nt = normalize(title)         # lowercase, strip punctuation, collapse spaces
-na = normalize_author(author)  # normalize then sort words alphabetically
-ne = normalize(edition)        # lowercase, strip punctuation; '' if no edition
+nt = normalize(title)            # lowercase, strip punctuation, collapse spaces
+na = normalize_author(author)    # normalize then sort words alphabetically
+ne = normalize_edition(edition)  # OCR-safe edition normalization; '' if no edition
 SELECT * FROM books WHERE title_norm=nt AND author_norm=na AND edition_norm=ne
 ```
 Word-order-independent author normalization handles name inversion:
@@ -350,10 +360,12 @@ Word-order-independent author normalization handles name inversion:
 - `"Devi, Ashapurna"` → `"ashapurna devi"` (comma stripped, then sorted)
 
 **Edition matching behaviour:**
-- `"6th Edition"` and `"7th Edition"` normalize to different strings → no match → treated as different bibs ✓
-- `"1st Edition"` and `"1st edition"` normalize to the same string → match ✓
+- `"6th Edition"` and `"7th Edition"` normalize to different strings (`"6"` vs `"7"`) → no match → treated as different bibs ✓
+- `"1st Edition"` and `"1st edition"` normalize to the same string (`"1"`) → match ✓
+- `"1st"`, `"1st Ed."`, `"First Edition"` all normalize to `"1"` → match ✓
+- `"!st Ed."` (OCR scanner error: 1 misread as !) normalizes to `"1"` → match ✓
 - Both editions empty (`''`) → match on title+author alone (same as pre-G1 behaviour) ✓
-- One edition known, other empty → no Stage 2 match (empty `''` ≠ `"1st edition"`) → falls through to Stage 3 fuzzy
+- One edition known, other empty → no Stage 2 match (empty `''` ≠ `"1"`) → falls through to Stage 3 fuzzy
 
 Returns `fuzzy=False`.
 
@@ -449,6 +461,13 @@ Form submitted (row_count, per-row: status, action, title, author, isbn, year, p
         │           "bulkmarcimport.pl -b -file <path> -match <rule> -insert -update -items"
         │       Returns (success, log_output)
         │
+        ├── create_label_pdf(label_barcodes, pdf_path) [ONLY if import succeeded]:
+        │       Collects all inserted new-book barcodes + copy barcodes
+        │       sudo koha-shell <instance> -c
+        │           "perl /path/to/create_label_batch.pl barcode1,barcode2,... template_id layout_id output.pdf"
+        │       Perl script creates Koha label batch in DB + generates PDF via C4::Creators::PDF
+        │       Returns (success, batch_id:items_added)
+        │
         └── Save result → session, redirect to /result/<sid>
 ```
 
@@ -504,6 +523,37 @@ subprocess.run(cmd, timeout=180)
 
 - Requires a sudoers rule: `dishari ALL=(root) NOPASSWD: /usr/sbin/koha-shell dishari_lib -c *`
 - If `koha-shell` is not on PATH (e.g. local dev), returns a graceful "not on Koha server" message — the user can download the MARC file and import manually via Koha Staff UI
+
+---
+
+## 11. Label PDF Generation (`create_label_batch.pl`)
+
+After a successful Koha import, the app invokes a Perl script to create a label batch and export a PDF:
+
+```perl
+# Pseudo-code logic (see create_label_batch.pl)
+create_batch(batch_id = max+1, items = insert rows for each barcode)
+template = C4::Labels::Template->retrieve(template_id, profile_id => 1)
+layout   = C4::Labels::Layout->retrieve(layout_id)
+batch    = C4::Labels::Batch->retrieve(batch_id)
+pdf      = C4::Creators::PDF->new()
+
+for each item in batch:
+    label = C4::Labels::Label->new(item_number, template, layout, ...)
+    pdf->Add(label->draw_guide_box)
+    pdf->Text(label->create_label())
+
+pdf->End() → write to file
+```
+
+**Script location:** `catalog-app/create_label_batch.pl`  
+**Invoked via:** `sudo koha-shell <instance> -c perl /path/to/create_label_batch.pl barcodes... template_id layout_id output.pdf`  
+**Template ID:** Configured via `KOHA_LABEL_TEMPLATE_ID` env var (default: `1` = "Avery 5160 | 1 x 2-5/8")  
+**Layout ID:** Configured via `KOHA_LABEL_LAYOUT_ID` env var (default: `17` = "Dishari Label")  
+**Barcode source:** All new-book barcodes (10XXXX) + all copy barcodes (11/12/13XXXX) from the batch  
+**Output:** A print-ready PDF written to `output/<sid>_labels.pdf` (downloaded from result page)
+
+**Gunicorn timeout:** Set to `--timeout 300` (label PDF generation can take up to 60 seconds)
 - Timeout: 3 minutes; returns full stdout+stderr as the import log on the result page
 
 ---
