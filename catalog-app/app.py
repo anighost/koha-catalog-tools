@@ -28,6 +28,9 @@ for d in (SESSIONS_DIR, UPLOADS_DIR, OUTPUT_DIR):
 CATALOG_PASSWORD  = os.environ.get('CATALOG_PASSWORD', 'changeme')
 KOHA_INSTANCE     = os.environ.get('KOHA_INSTANCE', 'dishari_lib')
 KOHA_MATCH_RULE   = os.environ.get('KOHA_MATCH_RULE', 'STRICT_CLE')
+KOHA_LABEL_TEMPLATE_ID = int(os.environ.get('KOHA_LABEL_TEMPLATE_ID', '1'))   # Avery 5160 | 1 x 2-5/8
+KOHA_LABEL_LAYOUT_ID   = int(os.environ.get('KOHA_LABEL_LAYOUT_ID',   '17'))  # Dishari Label
+LABEL_SCRIPT        = BASE_DIR / 'create_label_batch.pl'
 
 # Column indices — must match clean_catalog.py
 COL_ISBN        = 0
@@ -846,6 +849,44 @@ def import_to_koha(mrc_path: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def create_label_pdf(barcodes: list[str], pdf_path: str) -> tuple[bool, str]:
+    """
+    Create a Koha label batch and export it as a PDF via koha-shell.
+    The PDF is written to pdf_path by the Perl script.
+    Returns (success, message).
+    Only callable on the Koha server where koha-shell is present.
+    """
+    if not shutil.which('koha-shell'):
+        return False, 'koha-shell not found — not running on the Koha server.'
+    if not LABEL_SCRIPT.exists():
+        return False, f'{LABEL_SCRIPT.name} not found in app directory.'
+
+    barcode_str = ','.join(b for b in barcodes if b)
+    if not barcode_str:
+        return False, 'No barcodes provided.'
+
+    try:
+        cmd = [
+            'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
+            f'perl {shlex.quote(str(LABEL_SCRIPT))} '
+            f'{shlex.quote(barcode_str)} '
+            f'{KOHA_LABEL_TEMPLATE_ID} '
+            f'{KOHA_LABEL_LAYOUT_ID} '
+            f'{shlex.quote(pdf_path)}'
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True,
+                             stdin=subprocess.DEVNULL, timeout=60)
+        if res.returncode != 0:
+            return False, (res.stderr or res.stdout or 'Script exited non-zero').strip()
+        # Result line (batch_id:items_added) is written to STDERR by the Perl script
+        # because STDOUT is redirected to the PDF file.
+        return True, res.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return False, 'Label PDF generation timed out.'
+    except Exception as exc:
+        return False, str(exc)
+
+
 # ── CSRF protection ────────────────────────────────────────────────────────
 def _get_csrf_token() -> str:
     """Return (creating if needed) the per-session CSRF token."""
@@ -1224,6 +1265,7 @@ def process(sid):
     new_book_count = 0
     skipped_reg    = 0
     engine_errors  = ''
+    label_barcodes = []     # accumulates all barcodes inserted this session
 
     if new_rows:
         tmp_xlsx = tempfile.NamedTemporaryFile(
@@ -1246,6 +1288,7 @@ def process(sid):
                 processed = catalog_engine.extract_processed_books(audit_path)
                 skipped_reg, reg_warnings = register_books(processed, data['filename'])
                 new_book_count = len(processed)
+                label_barcodes.extend(b['barcode'] for b in processed if b.get('barcode'))
                 if reg_warnings:
                     engine_errors = (engine_errors + '\n' + reg_warnings).strip()
 
@@ -1310,6 +1353,7 @@ def process(sid):
 
                     copy_marc = catalog_engine.generate_copy_marc(meta, actual_copy_bc, next_num)
                     mrc_bytes += copy_marc
+                    label_barcodes.append(actual_copy_bc)
 
                     if isbn_clean:
                         conn.execute('UPDATE books SET copies=copies+1 WHERE isbn=?', (isbn_clean,))
@@ -1335,6 +1379,16 @@ def process(sid):
     if mrc_out_path:
         import_ok, import_msg = import_to_koha(mrc_out_path)
 
+    # ── Generate Koha label PDF (only when import succeeded) ─────────────
+    labels_path = None
+    if import_ok and label_barcodes:
+        pdf_out = str(OUTPUT_DIR / f'{sid}_labels.pdf')
+        ok, lmsg = create_label_pdf(label_barcodes, pdf_out)
+        if ok and Path(pdf_out).exists():
+            labels_path = pdf_out
+        elif not ok:
+            engine_errors = (engine_errors + f'\nLabel PDF: {lmsg}').strip()
+
     # ── Save result to session ────────────────────────────────────────────
     data['result'] = {
         'new_books':     new_book_count,
@@ -1353,6 +1407,7 @@ def process(sid):
         'import_ok':     import_ok,
         'import_msg':    import_msg,
         'engine_errors': engine_errors,
+        'labels_path':   labels_path,
     }
     save_session(sid, data)
 
@@ -1382,6 +1437,7 @@ def download(sid, filetype):
         'mrc':    r.get('mrc_path'),
         'audit':  r.get('audit_path'),
         'errors': r.get('errors_path'),
+        'labels': r.get('labels_path'),
     }
     path = paths.get(filetype)
     if not path or not os.path.exists(path):

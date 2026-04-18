@@ -17,8 +17,13 @@ Environment="KOHA_MATCH_RULE=STRICT_CLE"
 Environment="CATALOG_SCRIPT=/home/dishari/koha-catalog-tools/scripts/clean_catalog.py"
 Environment="CATALOG_META=/home/dishari/koha-catalog-tools/catalog-app/koha_session_meta.json"
 
+# Koha label IDs (creator_templates.template_id, creator_layouts.layout_id)
+Environment="KOHA_LABEL_TEMPLATE_ID=1"
+Environment="KOHA_LABEL_LAYOUT_ID=17"
+
 # Single worker — REQUIRED for filelock barcode serialization
-ExecStart=/home/dishari/.local/bin/gunicorn -w 1 -b 127.0.0.1:5050 app:app
+# --timeout 300: Koha import can take up to 180s; default 30s would kill the worker mid-import
+ExecStart=/home/dishari/.local/bin/gunicorn -w 1 --timeout 300 -b 127.0.0.1:5050 app:app
 
 Restart=always
 RestartSec=5

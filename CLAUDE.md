@@ -125,8 +125,9 @@ catalog-app/
 - `lookup_dup()` — 3-stage dedup: ISBN exact → title+author+edition exact → rapidfuzz fuzzy (threshold 80%/72%), with hard-block on edition conflict
 - `build_review_rows()` — parses upload, pre-normalises via `koha_session_meta.json` synonyms, runs dedup on every row; also checks for within-upload cross-row duplicates (`seen_in_upload` dict, G3)
 - `register_books()` — inserts processed books; detects barcode mismatches on re-runs
-- `process()` route — splits rows into new/copy/skip, calls `catalog_engine.run()`, merges MARC, calls `import_to_koha()`
+- `process()` route — splits rows into new/copy/skip, calls `catalog_engine.run()`, merges MARC, calls `import_to_koha()`, then `create_label_pdf()` on success
 - `import_to_koha()` — shells out to `sudo koha-shell <instance> -c bulkmarcimport.pl ...`
+- `create_label_pdf(barcodes, pdf_path)` — shells out to `sudo koha-shell <instance> -c perl create_label_batch.pl ...`; Perl script creates the batch and writes the PDF directly to `pdf_path`
 - `/health` — unauthenticated uptime probe; returns `{"status":"ok","db":true}`
 - `/heartbeat` — authenticated ping; review page calls this every 5 min to keep session alive
 
@@ -169,6 +170,8 @@ Each upload gets a UUID `sid`. State is stored in `sessions/<sid>.json` (not in 
 | `FLASK_SECRET_KEY` | random (warns) | Flask session signing key — set in production |
 | `KOHA_INSTANCE` | `dishari_lib` | Koha instance name passed to `koha-shell` |
 | `KOHA_MATCH_RULE` | `STRICT_CLE` | Match rule name for `bulkmarcimport.pl` |
+| `KOHA_LABEL_TEMPLATE_ID` | `1` | `template_id` in `creator_templates` (Avery 5160 \| 1 x 2-5/8) |
+| `KOHA_LABEL_LAYOUT_ID` | `17` | `layout_id` in `creator_layouts` (Dishari Label) |
 | `CATALOG_SCRIPT` | `../scripts/clean_catalog.py` | Path to `clean_catalog.py` |
 | `CATALOG_META` | `./koha_session_meta.json` | Path to `koha_session_meta.json` |
 

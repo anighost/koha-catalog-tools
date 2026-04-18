@@ -82,6 +82,12 @@
           &#11015;&nbsp; Error rows
         </a>
         {% endif %}
+        {% if r.labels_path %}
+        <a href="{{ url_for('download', sid=sid, filetype='labels') }}"
+           class="btn btn-ghost btn-sm">
+          &#11015;&nbsp; Labels PDF
+        </a>
+        {% endif %}
       </div>
       {% else %}
       <div class="p-3"

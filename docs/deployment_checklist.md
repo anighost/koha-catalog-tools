@@ -9,17 +9,15 @@
 
 ## Step 1 — Commit and push local changes
 
-Commit G1/G3 dedup, test suite, and gitignore updates:
-
 ```bash
 cd /Users/anirbanghosh/Code/koha-catalog-tools
 git add .gitignore catalog-app/
 git status   # confirm dedup_registry.db is NOT staged
-git commit -m "Add G1/G3 dedup, test suite, gitignore db/sessions"
+git commit -m "Add normalize_edition, fix process button, add label PDF generation"
 git push
 ```
 
-Status: ⬜ Pending
+Status: ✅ Done
 
 ---
 
@@ -33,7 +31,12 @@ rsync -av -e "ssh -p 2222" \
 dishari@aluposto.ddns.net:/home/dishari/koha-catalog-tools/catalog-app/
 ```
 
-Status: ⬜ Pending (re-sync needed for G1/G3 changes)
+After each rsync, make the label script executable:
+```bash
+ssh -p 2222 dishari@aluposto.ddns.net "chmod +x /home/dishari/koha-catalog-tools/catalog-app/create_label_batch.pl"
+```
+
+Status: ✅ Done
 
 ---
 
@@ -67,7 +70,7 @@ Status: ✅ Done
 ## Step 5 — sudoers for koha-shell
 
 Allows the Flask app (running as `dishari`) to invoke `bulkmarcimport.pl`
-via `koha-shell` without a password.
+and `create_label_batch.pl` via `koha-shell` without a password.
 
 ```bash
 sudo visudo -f /etc/sudoers.d/catalog-app
@@ -77,6 +80,8 @@ Add:
 ```
 dishari ALL=(root) NOPASSWD: /usr/sbin/koha-shell dishari_lib -c *
 ```
+
+The wildcard covers both `bulkmarcimport.pl` and `create_label_batch.pl` — no separate rule needed.
 
 Status: ⬜ Pending
 
@@ -103,7 +108,7 @@ To restart after code updates:
 sudo systemctl restart catalog-app
 ```
 
-Status: ✅ Done (running)
+Status: ✅ Done (running, --timeout 300, label IDs set)
 
 ---
 
@@ -204,6 +209,7 @@ Status: ✅ Done
 4. Re-upload same file → all rows flagged DUPLICATE with correct copy action
 5. Upload simultaneously in two tabs → barcodes don't collide (filelock test)
 6. Confirm `koha_session_meta.json` `last_primary_barcode` incremented correctly
+7. Result page shows **Labels PDF** download button → open it → verify barcodes and call numbers are correct for the Dishari Label layout on Avery 5160
 
 Status: ⬜ Pending
 
@@ -219,6 +225,8 @@ Status: ⬜ Pending
 | `KOHA_MATCH_RULE` | `STRICT_CLE` | Match rule for bulkmarcimport.pl |
 | `CATALOG_SCRIPT` | `../scripts/clean_catalog.py` | Path to clean_catalog.py |
 | `CATALOG_META` | `./koha_session_meta.json` | Path to koha_session_meta.json |
+| `KOHA_LABEL_TEMPLATE_ID` | `1` | Avery 5160 template in creator_templates |
+| `KOHA_LABEL_LAYOUT_ID` | `17` | Dishari Label layout in creator_layouts |
 
 ---
 
@@ -235,7 +243,13 @@ rsync -av -e "ssh -p 2222" \
 /Users/anirbanghosh/Code/koha-catalog-tools/catalog-app/ \
 dishari@aluposto.ddns.net:/home/dishari/koha-catalog-tools/catalog-app/
 
-# 3. Restart service
+# 3. Make label script executable
+ssh -p 2222 dishari@aluposto.ddns.net "chmod +x /home/dishari/koha-catalog-tools/catalog-app/create_label_batch.pl"
+
+# 4. If catalog-app.service changed, reload systemd first
+ssh -p 2222 dishari@aluposto.ddns.net "sudo systemctl daemon-reload"
+
+# 5. Restart service
 ssh -p 2222 dishari@aluposto.ddns.net "sudo systemctl restart catalog-app"
 ```
 
@@ -269,4 +283,4 @@ Status: ⬜ Pending (non-blocking — no secrets in sessions files)
 Steps to merge: see `docs/catalog-app-functional-spec.md` or run the
 **"Duplicate Bibs — Pending Review"** Koha report.
 
-After merging, always resync the registry (Step 8).
+After merging, always resync the registry (Step 9).
