@@ -71,6 +71,7 @@
           <th style="width:130px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">ISBN</th>
           <th style="width:65px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Year</th>
           <th style="font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Publisher</th>
+          <th style="width:90px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Edition</th>
           <th style="width:44px"></th>
           <th style="width:165px;font-size:0.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">
             Action
@@ -190,6 +191,16 @@
                    placeholder="—">
           </td>
 
+          <!-- Edition -->
+          <td style="padding:6px 8px">
+            <input type="text" name="col_{{ i }}_6" value="{{ row.cols[6] if 6 < row.cols|length else '' }}"
+                   class="form-control form-control-sm f-edition"
+                   style="border-radius:6px;border-color:var(--border);
+                          font-size:0.78rem;font-family:'Poppins',sans-serif;
+                          color:var(--text-muted);width:82px"
+                   placeholder="—">
+          </td>
+
           <!-- Expand/collapse extra fields -->
           <td class="align-top" style="padding:6px 6px 6px 0;text-align:center">
             <button type="button" class="details-toggle-link"
@@ -233,26 +244,30 @@
             </select>
           </td>
 
-          <!-- Hidden state -->
-          <input type="hidden" name="status_{{ i }}"      class="status-hidden"     value="{{ row.status }}">
-          <input type="hidden" name="dup_barcode_{{ i }}" class="dup-barcode-hidden" value="{{ row.dup_barcode or '' }}">
-          <input type="hidden" name="dup_source_{{ i }}"                             value="{{ row.dup_source or '' }}">
-          <input type="hidden" name="deleted_{{ i }}"     class="deleted-hidden"     value="">
-          {# col_skip: ISBN=0, author=2, title=3, subtitle=4, publisher=8, year=9,
-             pages=10, subject1=14, subject2=15, item_type=25, ccode=27
-             — these are rendered as real inputs (main row or detail row) #}
-          {% set col_skip = [0, 2, 3, 4, 8, 9, 10, 14, 15, 25, 27] %}
-          {% for ci in range(40) %}
-            {% if ci not in col_skip %}
-          <input type="hidden" name="col_{{ i }}_{{ ci }}" value="{{ row.cols[ci] if ci < row.cols|length else '' }}">
-            {% endif %}
-          {% endfor %}
+          <!-- Hidden state — must be inside a <td> so tr.querySelector() can find them.
+               Inputs placed directly in <tr> are "foster parented" before the table
+               by the HTML5 parser, making them invisible to tr.querySelector(). -->
+          <td style="display:none;padding:0">
+            <input type="hidden" name="status_{{ i }}"      class="status-hidden"     value="{{ row.status }}">
+            <input type="hidden" name="dup_barcode_{{ i }}" class="dup-barcode-hidden" value="{{ row.dup_barcode or '' }}">
+            <input type="hidden" name="dup_source_{{ i }}"                             value="{{ row.dup_source or '' }}">
+            <input type="hidden" name="deleted_{{ i }}"     class="deleted-hidden"     value="">
+            {# col_skip: ISBN=0, author=2, title=3, subtitle=4, publisher=8, year=9,
+               pages=10, subject1=14, subject2=15, item_type=25, ccode=27
+               — these are rendered as real inputs (main row or detail row) #}
+            {% set col_skip = [0, 2, 3, 4, 6, 8, 9, 10, 14, 15, 25, 27] %}
+            {% for ci in range(40) %}
+              {% if ci not in col_skip %}
+            <input type="hidden" name="col_{{ i }}_{{ ci }}" value="{{ row.cols[ci] if ci < row.cols|length else '' }}">
+              {% endif %}
+            {% endfor %}
+          </td>
         </tr>
 
         {# ── Expandable detail row ── #}
         <tr class="detail-row" id="detail-row-{{ i }}"
             style="display:none;background:#fdfbfb;border-bottom:2px solid #f0dede">
-          <td colspan="8" style="padding:10px 16px 14px 52px">
+          <td colspan="9" style="padding:10px 16px 14px 52px">
             <div style="display:flex;flex-wrap:wrap;gap:14px 20px;align-items:flex-end">
 
               {# Subtitle #}
@@ -541,7 +556,7 @@
     }, 450);
   }
 
-  document.querySelectorAll('.f-title,.f-author,.f-isbn').forEach(function(inp){
+  document.querySelectorAll('.f-title,.f-author,.f-isbn,.f-edition').forEach(function(inp){
     inp.addEventListener('input', function(){ checkDedup(this.closest('tr')); });
   });
 
@@ -912,7 +927,7 @@
       warnEl.style.display = 'none';
     }
 
-    bootstrap.Modal.getOrCreate(document.getElementById('confirmModal')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('confirmModal')).show();
   };
 
   // Show a dismissible warning banner 20 minutes before session expires

@@ -35,6 +35,32 @@ def normalize_author(text: str) -> str:
     return ' '.join(sorted(normalize(text).split()))
 
 
+_EDITION_WORD_MAP = {
+    'first': '1', 'second': '2', 'third': '3', 'fourth': '4',
+    'fifth': '5', 'sixth': '6', 'seventh': '7', 'eighth': '8',
+    'ninth': '9', 'tenth': '10',
+}
+_EDITION_NOISE = re.compile(r'\b(edition|editions|ed|eds)\b\.?', re.IGNORECASE)
+
+
+def normalize_edition(text: str) -> str:
+    if not text:
+        return ''
+    s = text.strip()
+    s = re.sub(r'!(?=st|nd|rd|th|\s|$)', '1', s, flags=re.IGNORECASE)
+    s = normalize(s)
+    if not s:
+        return ''
+    m = re.match(r'^(\d+)(?:st|nd|rd|th)?\b', s)
+    if m:
+        return m.group(1)
+    first_word = s.split()[0]
+    if first_word in _EDITION_WORD_MAP:
+        return _EDITION_WORD_MAP[first_word]
+    s = _EDITION_NOISE.sub('', s).strip()
+    return s
+
+
 # ── Read MySQL credentials from koha-conf.xml ──────────────────────────────
 
 def read_koha_db_config(conf_path: str) -> dict:
@@ -130,7 +156,7 @@ HAVING primary_barcode IS NOT NULL;
 
         books.append({
             'isbn':           isbn,
-            'edition_norm':   normalize(edition),
+            'edition_norm':   normalize_edition(edition),
             'title_norm':     normalize(title),
             'author_norm':    normalize_author(author),
             'title_display':  title,

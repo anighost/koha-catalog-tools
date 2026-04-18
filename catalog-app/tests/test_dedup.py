@@ -134,7 +134,7 @@ class TestLookupDupStage2Exact(object):
 
     def test_edition_match_same(self, tmp_db):
         seed_book(tmp_db, title_norm='sanchaita', author_norm='ashapurna devi',
-                  edition_norm='6th edition', barcode='100046')
+                  edition_norm='6', barcode='100046')
         result = lookup_dup('', 'Sanchaita', 'Ashapurna Devi', '6th Edition')
         assert result is not None
         assert result['barcode'] == '100046'
@@ -142,7 +142,7 @@ class TestLookupDupStage2Exact(object):
     def test_edition_mismatch_no_stage2_match(self, tmp_db):
         # "6th Edition" vs "7th Edition" → different editions → no Stage 2 match
         seed_book(tmp_db, title_norm='sanchaita', author_norm='ashapurna devi',
-                  edition_norm='6th edition', barcode='100046')
+                  edition_norm='6', barcode='100046')
         result = lookup_dup('', 'Sanchaita', 'Ashapurna Devi', '7th Edition')
         # May match Stage 3 (fuzzy) but NOT Stage 2
         # We confirm by checking fuzzy flag
@@ -160,7 +160,7 @@ class TestLookupDupStage2Exact(object):
     def test_one_edition_empty_no_stage2_match(self, tmp_db):
         # Registry has edition; upload has no edition → no Stage 2 match
         seed_book(tmp_db, title_norm='sanchaita', author_norm='ashapurna devi',
-                  edition_norm='6th edition', barcode='100046')
+                  edition_norm='6', barcode='100046')
         result = lookup_dup('', 'Sanchaita', 'Ashapurna Devi', '')
         # Not a Stage 2 match; may be Stage 3 fuzzy
         if result is not None:
@@ -190,7 +190,7 @@ class TestLookupDupStage3Fuzzy(object):
     def test_fuzzy_blocked_on_edition_conflict(self, tmp_db):
         # Both editions known and differ → hard block, no fuzzy match
         seed_book(tmp_db, title_norm='sanchaita', author_norm='ashapurna devi',
-                  edition_norm='6th edition', title_display='Sanchaita', barcode='100046')
+                  edition_norm='6', title_display='Sanchaita', barcode='100046')
         result = lookup_dup('', 'Sanchaita', 'Ashapurna Devi', '7th Edition')
         # Hard block means no match at all (Stage 3 skipped for this candidate)
         assert result is None
@@ -206,7 +206,7 @@ class TestLookupDupStage3Fuzzy(object):
     def test_fuzzy_allowed_when_one_edition_empty(self, tmp_db):
         # Registry has edition; upload has none → edition hard-block does NOT fire
         seed_book(tmp_db, title_norm='sanchaita', author_norm='ashapurna devi',
-                  edition_norm='6th edition', title_display='Sanchaita', barcode='100046')
+                  edition_norm='6', title_display='Sanchaita', barcode='100046')
         result = lookup_dup('', 'Sanchaita', 'Ashapurna Devi', '')
         # Should fuzzy-match (no hard block since upload edition is empty)
         assert result is not None

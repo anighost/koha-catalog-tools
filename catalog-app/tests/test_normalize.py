@@ -7,6 +7,7 @@ import pytest
 from app import (
     normalize,
     normalize_author,
+    normalize_edition,
     clean_isbn,
     clean_year,
     next_copy_action,
@@ -136,6 +137,99 @@ class TestCleanYear:
 
 
 # ── next_copy_action() ─────────────────────────────────────────────────────
+
+class TestNormalizeEdition:
+    def test_bare_digit(self):
+        assert normalize_edition('1') == '1'
+
+    def test_ordinal_suffix(self):
+        assert normalize_edition('1st') == '1'
+
+    def test_ordinal_with_ed(self):
+        assert normalize_edition('1st Ed') == '1'
+
+    def test_ordinal_with_edition(self):
+        assert normalize_edition('1st Edition.') == '1'
+
+    def test_ocr_bang_ordinal(self):
+        assert normalize_edition('!st Ed.') == '1'
+
+    def test_second_ordinal(self):
+        assert normalize_edition('2nd Edition') == '2'
+
+    def test_second_bare(self):
+        assert normalize_edition('2nd') == '2'
+
+    def test_second_with_ed(self):
+        assert normalize_edition('2nd Ed.') == '2'
+
+    def test_third_ordinal(self):
+        assert normalize_edition('3rd ed') == '3'
+
+    def test_third_bare(self):
+        assert normalize_edition('3rd') == '3'
+
+    def test_third_with_edition(self):
+        assert normalize_edition('3rd Edition') == '3'
+
+    def test_fourth_ordinal(self):
+        assert normalize_edition('4th Edition') == '4'
+
+    def test_fourth_bare(self):
+        assert normalize_edition('4th') == '4'
+
+    def test_word_ordinal_first(self):
+        assert normalize_edition('First Edition') == '1'
+
+    def test_word_ordinal_second(self):
+        assert normalize_edition('Second') == '2'
+
+    def test_word_ordinal_third(self):
+        assert normalize_edition('Third ed.') == '3'
+
+    def test_word_ordinal_fourth(self):
+        assert normalize_edition('Fourth Edition') == '4'
+
+    def test_empty_string(self):
+        assert normalize_edition('') == ''
+
+    def test_none_equivalent(self):
+        assert normalize_edition(None) == ''
+
+    def test_all_first_variants_same(self):
+        # All common ways "1st edition" can appear → same canonical "1"
+        variants = ['1', '1st', '1st Ed', '1st Edition.', '!st Ed.', 'First', 'First Edition']
+        results = {normalize_edition(v) for v in variants}
+        assert results == {'1'}
+
+    def test_all_second_variants_same(self):
+        variants = ['2', '2nd', '2nd Ed', '2nd Edition', 'Second', 'Second Edition']
+        results = {normalize_edition(v) for v in variants}
+        assert results == {'2'}
+
+    def test_all_third_variants_same(self):
+        variants = ['3', '3rd', '3rd Ed.', '3rd Edition', 'Third', 'Third ed']
+        results = {normalize_edition(v) for v in variants}
+        assert results == {'3'}
+
+    def test_all_fourth_variants_same(self):
+        variants = ['4', '4th', '4th Ed', '4th Edition', 'Fourth Edition']
+        results = {normalize_edition(v) for v in variants}
+        assert results == {'4'}
+
+    def test_different_editions_differ(self):
+        assert normalize_edition('1st') != normalize_edition('2nd')
+        assert normalize_edition('2nd') != normalize_edition('3rd')
+        assert normalize_edition('3rd') != normalize_edition('4th')
+
+    def test_revised_passthrough(self):
+        # "revised" has no numeric equivalent — returned as-is after noise strip
+        assert normalize_edition('Revised Edition') == 'revised'
+
+    def test_noise_only_string(self):
+        # "ed" alone → stripped to empty
+        assert normalize_edition('Ed') == ''
+
 
 class TestNextCopyAction:
     def test_one_copy_suggests_copy2(self):

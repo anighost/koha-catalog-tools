@@ -145,6 +145,62 @@ def normalize_author(text: str) -> str:
     return ' '.join(sorted(normalize(text).split()))
 
 
+_EDITION_WORD_MAP = {
+    'first': '1', 'second': '2', 'third': '3', 'fourth': '4',
+    'fifth': '5', 'sixth': '6', 'seventh': '7', 'eighth': '8',
+    'ninth': '9', 'tenth': '10',
+}
+_EDITION_NOISE = re.compile(r'\b(edition|editions|ed|eds)\b\.?', re.IGNORECASE)
+
+
+def normalize_edition(text: str) -> str:
+    """
+    Smart edition normalization so common variants map to the same key.
+
+    Numeric ordinals (any number):
+      "1", "1st", "1st Ed", "1st Edition."  → "1"
+      "2nd", "2nd Ed", "2nd Edition"        → "2"
+      "3rd", "3rd Ed.", "3rd Edition"       → "3"
+      "4th Edition"                          → "4"
+
+    OCR artefact — scanner misreads '1' as '!':
+      "!st Ed."  (scanned copy of "1st Ed.")  → "1"
+
+    Word ordinals:
+      "First Edition", "Second Ed", "Third"  → "1", "2", "3"
+
+    Other:
+      "Revised Edition" → "revised"
+      "" / None         → ""
+
+    Steps:
+      1. OCR fix: replace '!' before ordinal suffix with '1' ("!st" → "1st")
+      2. Run through normalize() — lowercase, strip punctuation, collapse spaces
+      3. Numeric ordinal prefix ("1st", "2nd", "3", "4th") → bare digit
+      4. Word ordinal ("first", "second", …) → bare digit
+      5. Strip edition/ed noise words and return remainder
+    """
+    if not text:
+        return ''
+    s = text.strip()
+    # Fix OCR artefact: '!' at start of ordinal ("!st Ed" → "1st Ed")
+    s = re.sub(r'!(?=st|nd|rd|th|\s|$)', '1', s, flags=re.IGNORECASE)
+    s = normalize(s)   # lowercase, strip punctuation, collapse spaces
+    if not s:
+        return ''
+    # Numeric ordinal prefix: "1st", "2nd", "3", "4th" → "1", "2", "3", "4"
+    m = re.match(r'^(\d+)(?:st|nd|rd|th)?\b', s)
+    if m:
+        return m.group(1)
+    # Word ordinal: "first edition", "second" → "1", "2"
+    first_word = s.split()[0]
+    if first_word in _EDITION_WORD_MAP:
+        return _EDITION_WORD_MAP[first_word]
+    # Strip noise words ("edition", "ed") and return whatever remains
+    s = _EDITION_NOISE.sub('', s).strip()
+    return s
+
+
 def clean_isbn(isbn: str) -> str:
     """
     Normalize an ISBN to its ISBN-13 form, mirroring clean_catalog.py.
@@ -272,7 +328,7 @@ def lookup_dup(isbn: str, title: str, author: str, edition: str = '') -> dict | 
     Returns None if no match.
     """
     isbn_clean = clean_isbn(isbn)
-    ne = normalize(edition)   # edition_norm for this lookup
+    ne = normalize_edition(edition)   # edition_norm for this lookup
 
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
@@ -373,7 +429,7 @@ def register_books(books: list, source_file: str) -> tuple[int, str]:
             isbn = clean_isbn(b.get('isbn') or '') or None
             nt = normalize(b['title'])
             na = normalize_author(b['author'])
-            ne = normalize(b.get('edition') or '')
+            ne = normalize_edition(b.get('edition') or '')
             cur = conn.execute(
                 'INSERT OR IGNORE INTO books '
                 '(isbn, title_norm, author_norm, edition_norm, title_display, author_display, '
@@ -689,7 +745,7 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
         if not dup and title:
             tn = normalize(title)
             an = normalize_author(author_for_dedup)
-            ne = normalize(edition)
+            ne = normalize_edition(edition)
             # Check ISBN first (most reliable), then title+author+edition
             if isbn and ('isbn', isbn) in seen_in_upload:
                 same_file_dup_row = seen_in_upload[('isbn', isbn)] + 1
@@ -731,7 +787,7 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
         if title:
             tn = normalize(title)
             an = normalize_author(author_for_dedup)
-            ne = normalize(edition)
+            ne = normalize_edition(edition)
             if isbn:
                 seen_in_upload.setdefault(('isbn', isbn), idx)
             if tn and an:
@@ -1094,6 +1150,7 @@ def process(sid):
         genre     = request.form.get(f'genre_{i}',     '').strip()
         item_type = request.form.get(f'item_type_{i}', '').strip()
         ccode     = request.form.get(f'ccode_{i}',     '').strip()
+        edition   = request.form.get(f'col_{i}_6',    '').strip()
         dup_bc    = request.form.get(f'dup_barcode_{i}', '')
 
         # Rebuild the full 40-column list with user edits applied
@@ -1103,6 +1160,7 @@ def process(sid):
         cols[COL_TITLE]     = title
         if year:      cols[COL_YEAR]      = year
         if publisher: cols[COL_PUBLISHER] = publisher
+        if edition is not None: cols[COL_EDITION] = edition
         if subtitle:  cols[COL_SUBTITLE]  = subtitle
         if pages:     cols[COL_PAGES]     = pages
         if category:  cols[14]            = category
