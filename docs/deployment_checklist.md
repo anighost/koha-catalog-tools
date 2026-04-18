@@ -83,7 +83,7 @@ dishari ALL=(root) NOPASSWD: /usr/sbin/koha-shell dishari_lib -c *
 
 The wildcard covers both `bulkmarcimport.pl` and `create_label_batch.pl` — no separate rule needed.
 
-Status: ⬜ Pending
+Status: ✅ Done (2026-04-18)
 
 ---
 
@@ -134,11 +134,70 @@ sudo a2ensite catalog-app
 sudo systemctl reload apache2
 ```
 
+Status: ✅ Done (2026-04-18)
+
+---
+
+## Step 8 — SSL Certificate (Let's Encrypt)
+
+Set up HTTPS on the origin server for end-to-end encryption (Cloudflare → Apache).
+
+```bash
+# Install certbot
+sudo apt-get update
+sudo apt-get install certbot python3-certbot-apache
+
+# Generate certificate
+sudo certbot certonly --standalone -d catalog.disharifoundation.org
+
+# Update Apache vhost to use SSL
+sudo nano /etc/apache2/sites-available/catalog-app.conf
+```
+
+Replace the vhost with:
+```apache
+<VirtualHost *:443>
+    ServerName catalog.disharifoundation.org
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/catalog.disharifoundation.org/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/catalog.disharifoundation.org/privkey.pem
+    
+    ProxyPass        / http://127.0.0.1:5050/
+    ProxyPassReverse / http://127.0.0.1:5050/
+</VirtualHost>
+
+# Redirect HTTP to HTTPS
+<VirtualHost *:80>
+    ServerName catalog.disharifoundation.org
+    Redirect permanent / https://catalog.disharifoundation.org/
+</VirtualHost>
+```
+
+Enable SSL module and reload:
+```bash
+sudo a2enmod ssl
+sudo systemctl reload apache2
+```
+
+Auto-renewal (certbot handles this automatically):
+```bash
+sudo systemctl enable certbot.timer
+```
+
 Status: ⬜ Pending
 
 ---
 
-## Step 8 — Cloudflare DNS
+## Step 9 — Cloudflare SSL Mode
+
+In Cloudflare dashboard → SSL/TLS → Encryption level, set to **Full (strict)** mode.
+This ensures Cloudflare trusts your origin certificate.
+
+Status: ⬜ Pending
+
+---
+
+## Step 10 — Cloudflare DNS
 
 Add a CNAME record in Cloudflare:
 
@@ -150,7 +209,7 @@ Status: ⬜ Pending
 
 ---
 
-## Step 9 — Reset and re-seed SQLite registry
+## Step 11 — Reset and re-seed SQLite registry
 
 G1 added `edition_norm` and changed the unique index. The old registry on the
 server has the pre-G1 schema. Steps must be done in this order:
@@ -174,11 +233,11 @@ Done — inserted ~1709 new rows, skipped 0 already present.
 
 **After merging duplicate bibs in Koha:** re-run backfill only (no DELETE needed).
 
-Status: ⬜ Pending
+Status: ✅ Done (2026-04-18 — 1667 rows from Koha, 42 skipped as duplicates)
 
 ---
 
-## Step 10 — Verify Koha matching rule
+## Step 12 — Verify Koha matching rule
 
 Confirm `STRICT_CLE` exists in Koha:
 
@@ -193,7 +252,7 @@ Status: ✅ Done — STRICT_CLE confirmed present
 
 ---
 
-## Step 11 — Fix 952\$t copy numbers
+## Step 13 — Fix 952\$t copy numbers
 
 Already applied via SQL UPDATE on 2026-04-16 — 1789 rows updated.
 
@@ -201,7 +260,7 @@ Status: ✅ Done
 
 ---
 
-## Step 12 — End-to-end smoke test
+## Step 14 — End-to-end smoke test
 
 1. Upload a small Gronthee XLSX → review screen shows rows correctly
 2. Process → result screen shows import stats (X new, 0 errors)
@@ -211,7 +270,7 @@ Status: ✅ Done
 6. Confirm `koha_session_meta.json` `last_primary_barcode` incremented correctly
 7. Result page shows **Labels PDF** download button → open it → verify barcodes and call numbers are correct for the Dishari Label layout on Avery 5160
 
-Status: ⬜ Pending
+Status: ⏳ In progress (2026-04-18)
 
 ---
 
