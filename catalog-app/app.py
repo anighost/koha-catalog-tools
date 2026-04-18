@@ -821,32 +821,132 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
     return review
 
 
+# ── Koha item addition ─────────────────────────────────────────────────────
+def add_copy_item_to_koha(dup_barcode: str, copy_barcode: str, copy_num: int, meta: dict) -> tuple[bool, str]:
+    """
+    Add a copy item to an existing Koha bib.
+
+    Looks up biblionumber from the existing primary barcode (dup_barcode),
+    then inserts a new item with copy_barcode via Koha::Item Perl API.
+
+    Args:
+        dup_barcode: primary barcode of existing book (10XXXX)
+        copy_barcode: new copy barcode (11/12/13XXXX)
+        copy_num: copy number (2, 3, or 4)
+        meta: dict with home_branch, hold_branch, item_type, call_no, date, ccode, cost
+
+    Returns: (success: bool, message: str)
+    """
+    import tempfile
+    if not shlex.which('koha-shell'):
+        return False, 'koha-shell not found — not running on the Koha server.'
+
+    try:
+        # Build Perl script to add item via Koha API
+        perl_script = f"""
+use strict;
+use warnings;
+use Koha::Items;
+
+# Look up existing item by primary barcode
+my $existing = Koha::Items->find({{ barcode => '{dup_barcode}' }});
+unless ($existing) {{
+    die "ERROR: No item found with barcode {dup_barcode}\\n";
+}}
+
+my $biblionumber = $existing->biblionumber;
+my $biblioitemnumber = $existing->biblioitemnumber;
+
+# Create new item with copy barcode
+my $item = Koha::Item->new({{
+    biblionumber => $biblionumber,
+    biblioitemnumber => $biblioitemnumber,
+    barcode => '{copy_barcode}',
+    homebranch => '{meta.get("home_branch", "DFL")}',
+    holdingbranch => '{meta.get("hold_branch", "DFL")}',
+    itype => '{meta.get("item_type", "BK")}',
+    itemcallnumber => '{meta.get("call_no", "891")}',
+    dateaccessioned => '{meta.get("date", "")}',
+    copynumber => {copy_num},
+}})->store;
+
+print "OK\\n";
+"""
+        # Write script to temp file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.pl', delete=False) as f:
+            f.write(perl_script)
+            script_path = f.name
+
+        try:
+            # Run via koha-shell
+            cmd = [
+                'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
+                f'perl {shlex.quote(script_path)}'
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                   stdin=subprocess.DEVNULL, timeout=60)
+            if result.returncode == 0 and 'OK' in result.stdout:
+                return True, f'Copy item added: barcode {copy_barcode}'
+            return False, f'Failed to add copy item:\n{result.stderr or result.stdout}'
+        finally:
+            Path(script_path).unlink(missing_ok=True)
+
+    except Exception as exc:
+        return False, f'Error adding copy item: {exc}'
+
+
 # ── Koha import ────────────────────────────────────────────────────────────
 def import_to_koha(mrc_path: str) -> tuple[bool, str]:
     """
-    Try to import MARC file directly via bulkmarcimport.pl on the Koha server.
+    Import MARC file via bulkmarcimport.pl on the Koha server.
+
+    Copies the file to /tmp first (Koha user can't access /home/dishari).
+    Uses --insert to add new bibs only. COPY records are handled separately
+    via add_copy_item_to_koha() which directly inserts items via Koha API.
+
     Returns (success, message).
     """
     import shutil
     if not shutil.which('koha-shell'):
         return False, 'koha-shell not found — not running on the Koha server.'
     try:
-        cmd = [
-            'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
-            f'bulkmarcimport.pl -b -file {shlex.quote(str(mrc_path))}'
-            f' -match {shlex.quote(KOHA_MATCH_RULE)} -insert -update -items'
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True,
-                               stdin=subprocess.DEVNULL, timeout=180)
-        if result.returncode == 0:
-            return True, result.stdout or 'Import completed.'
-        return False, f'Import exited {result.returncode}:\n{result.stderr}'
+        # Copy to /tmp so Koha user can read it (home dir is not accessible)
+        tmp_mrc = Path('/tmp') / f'catalog_import_{Path(mrc_path).stem}.mrc'
+        shutil.copy2(mrc_path, tmp_mrc)
+
+        try:
+            cmd = [
+                'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
+                f'/usr/share/koha/bin/migration_tools/bulkmarcimport.pl -b --insert -file {shlex.quote(str(tmp_mrc))}'
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                   stdin=subprocess.DEVNULL, timeout=180)
+            if result.returncode == 0:
+                return True, result.stdout or 'Import completed.'
+            return False, f'Import exited {result.returncode}:\n{result.stderr}'
+        finally:
+            # Clean up temp file
+            tmp_mrc.unlink(missing_ok=True)
     except FileNotFoundError:
         return False, 'koha-shell not found — not running on the Koha server.'
     except subprocess.TimeoutExpired:
         return False, 'Import timed out after 3 minutes.'
     except Exception as exc:
         return False, str(exc)
+
+
+def rollback_registry(source_file: str) -> int:
+    """
+    Delete all registry entries from a failed import session.
+    Returns count of rows deleted.
+    """
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        cur = conn.execute('DELETE FROM books WHERE source_file=?', (source_file,))
+        deleted = cur.rowcount
+        conn.commit()
+        if deleted > 0:
+            logging.info(f'Rolled back {deleted} registry entries for source_file={source_file}')
+    return deleted
 
 
 def create_label_pdf(barcodes: list[str], pdf_path: str) -> tuple[bool, str]:
@@ -1351,9 +1451,12 @@ def process(sid):
 
                     actual_copy_bc = _prefix_map[next_num] + dup_bc[2:]
 
-                    copy_marc = catalog_engine.generate_copy_marc(meta, actual_copy_bc, next_num)
-                    mrc_bytes += copy_marc
-                    label_barcodes.append(actual_copy_bc)
+                    # Add item to existing Koha bib via Perl API (not via MARC)
+                    copy_ok, copy_msg = add_copy_item_to_koha(dup_bc, actual_copy_bc, next_num, meta)
+                    if copy_ok:
+                        label_barcodes.append(actual_copy_bc)
+                    else:
+                        engine_errors += f'\nRow {meta["idx"]}: {copy_msg}'
 
                     if isbn_clean:
                         conn.execute('UPDATE books SET copies=copies+1 WHERE isbn=?', (isbn_clean,))
@@ -1378,6 +1481,12 @@ def process(sid):
     import_msg = ''
     if mrc_out_path:
         import_ok, import_msg = import_to_koha(mrc_out_path)
+        # Auto-rollback registry if import failed
+        if not import_ok and new_book_count > 0:
+            rolled_back = rollback_registry(data['filename'])
+            import_msg += f'\n[Rolled back {rolled_back} registry entries]'
+            new_book_count = 0
+            label_barcodes = []
 
     # ── Generate Koha label PDF (only when import succeeded) ─────────────
     labels_path = None
