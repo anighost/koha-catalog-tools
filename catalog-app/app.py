@@ -97,7 +97,8 @@ def init_db():
         # Add columns to existing DBs that predate this schema
         for col, coltype in [('title_display', 'TEXT'), ('author_display', 'TEXT'),
                               ('publisher', 'TEXT'), ('year', 'TEXT'),
-                              ("edition_norm", "TEXT NOT NULL DEFAULT ''")]:
+                              ("edition_norm", "TEXT NOT NULL DEFAULT ''"),
+                              ('pages', 'TEXT')]:
             try:
                 conn.execute(f'ALTER TABLE books ADD COLUMN {col} {coltype}')
             except Exception:
@@ -429,13 +430,14 @@ def register_books(books: list, source_file: str) -> tuple[int, str]:
             cur = conn.execute(
                 'INSERT OR IGNORE INTO books '
                 '(isbn, title_norm, author_norm, edition_norm, title_display, author_display, '
-                'publisher, year, barcode, source_file) '
-                'VALUES (?,?,?,?,?,?,?,?,?,?)',
+                'publisher, year, pages, barcode, source_file) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
                 (isbn or None, nt, na, ne,
                  b['title'],
                  b['author'],
                  b.get('publisher') or None,
                  b.get('year') or None,
+                 b.get('pages') or None,
                  b['barcode'],
                  source_file)
             )
@@ -1060,7 +1062,7 @@ def api_book():
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             'SELECT isbn, title_display, title_norm, author_display, author_norm, '
-            'publisher, year, barcode, copies, added_at, source_file FROM books WHERE barcode=?',
+            'publisher, year, edition_norm, pages, barcode, copies, added_at, source_file FROM books WHERE barcode=?',
             (barcode,)
         ).fetchone()
     if not row:
@@ -1084,6 +1086,8 @@ def api_book():
         isbn=r.get('isbn') or '',
         publisher=r.get('publisher') or '',
         year=r.get('year') or '',
+        edition=r.get('edition_norm') or '',
+        pages=r.get('pages') or '',
         copies=r.get('copies', 1),
         copies_list=copies_list,
         added_at=(r.get('added_at') or '')[:10],

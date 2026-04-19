@@ -236,6 +236,7 @@ def extract_processed_books(audit_path: str) -> list:
             'edition':   str(row[6]  if len(row) > 6  else '').strip(),
             'publisher': str(row[8]  if len(row) > 8  else '').strip(),
             'year':      str(row[9]  if len(row) > 9  else '').strip(),
+            'pages':     str(row[10] if len(row) > 10 else '').strip(),
             'barcode':   barcode,
         })
     wb.close()

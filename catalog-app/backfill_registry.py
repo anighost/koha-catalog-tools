@@ -92,11 +92,13 @@ def fetch_koha_books(db_name: str) -> list[dict]:
     sql = (
         "SELECT b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement,"
         " MIN(CASE WHEN i.barcode LIKE '10%' THEN i.barcode END) AS primary_barcode,"
-        " COUNT(i.itemnumber) AS copies"
+        " COUNT(i.itemnumber) AS copies,"
+        " bi.publishercode, bi.publicationyear, bi.pages"
         " FROM biblio b"
         " JOIN biblioitems bi USING(biblionumber)"
         " LEFT JOIN items i USING(biblionumber)"
-        " GROUP BY b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement"
+        " GROUP BY b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement,"
+        " bi.publishercode, bi.publicationyear, bi.pages"
         " HAVING primary_barcode IS NOT NULL;"
     )
 
@@ -113,11 +115,17 @@ def fetch_koha_books(db_name: str) -> list[dict]:
         if len(parts) < 7:
             continue
         _, title, author, isbn, edition, primary_barcode, copies = parts[:7]
+        publisher = parts[7].strip() if len(parts) > 7 else ''
+        year      = parts[8].strip() if len(parts) > 8 else ''
+        pages     = parts[9].strip() if len(parts) > 9 else ''
         title   = title.strip()
         author  = author.strip()
         isbn    = isbn.strip() if isbn.strip() not in ('', 'NULL') else ''
         edition = edition.strip() if edition.strip() not in ('', 'NULL') else ''
         barcode = primary_barcode.strip()
+        publisher = publisher if publisher not in ('', 'NULL') else ''
+        year      = year      if year      not in ('', 'NULL') else ''
+        pages     = pages     if pages     not in ('', 'NULL') else ''
         try:
             copies = int(copies.strip())
         except ValueError:
@@ -133,6 +141,9 @@ def fetch_koha_books(db_name: str) -> list[dict]:
             'author_norm':    normalize_author(author),
             'title_display':  title,
             'author_display': author,
+            'publisher':      publisher,
+            'year':           year,
+            'pages':          pages,
             'barcode':        barcode,
             'copies':         copies,
         })
@@ -151,10 +162,12 @@ def backfill(books: list[dict]) -> tuple[int, int]:
                     '''INSERT OR IGNORE INTO books
                        (isbn, title_norm, author_norm, edition_norm,
                         title_display, author_display,
+                        publisher, year, pages,
                         barcode, copies, source_file)
-                       VALUES (?,?,?,?,?,?,?,?,'koha-backfill')''',
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,'koha-backfill')''',
                     (b['isbn'], b['title_norm'], b['author_norm'], b['edition_norm'],
                      b['title_display'], b['author_display'],
+                     b['publisher'] or None, b['year'] or None, b['pages'] or None,
                      b['barcode'], b['copies'])
                 )
                 if conn.execute('SELECT changes()').fetchone()[0]:
