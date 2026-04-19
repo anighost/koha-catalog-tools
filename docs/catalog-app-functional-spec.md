@@ -507,10 +507,12 @@ The app does **not** auto-import to Koha. After processing, the operator downloa
 2. Upload the `.mrc` file
 3. Configure staging options:
    - **Match rule:** `KohaBiblio` (matches on `999$c` → Local-Number)
-   - **Action on match:** `Replace existing record with incoming record` (for new books, no match is found so this is a no-op; for copy records it preserves the existing bib)
+   - **Action on match:** `Ignore incoming record (keep existing)` — preserves the full existing bib (subjects, series, notes etc.); Koha still adds the embedded `952` item via the item handling setting below
    - **Action on no match:** `Add incoming record`
    - **Item handling:** `Always add items`
 4. Click **Stage for import**, then **Import this batch**
+
+**Why "Ignore incoming record" and not "Replace":** Copy records are lite MARC files containing only the fields needed to attach a physical item (020, 100, 245, 250, 260, 942, 999, 952). Using "Replace" would overwrite the existing bib with this stripped-down record, destroying 650 subjects, 830 series, 500 notes, and any other rich fields from the original cataloging. "Ignore incoming record" keeps the existing bib intact while "Always add items" still attaches the new `952` item. For new books (no `999$c`), no match is found so the "Action on no match" path applies regardless.
 
 **Why manual import:** Auto-import via `bulkmarcimport.pl` required sudoers + `koha-shell` access and was hard to debug when it failed silently. Manual import via Koha Staff UI gives the operator a visible confirmation step and is safer for production use.
 
@@ -519,7 +521,7 @@ The app does **not** auto-import to Koha. After processing, the operator downloa
 |-------------|-----|----------|-------|-------|
 | Local-Number | 999 | c | Local-Number | 100 |
 
-Required score: 100. This means only `999$c` is used for matching. For new books (no `999$c`), the rule finds no match and Koha adds a new bib. For copy records (with `999$c`), it finds the exact bib and attaches the `952` item.
+Required score: 100. This means only `999$c` is used for matching. For new books (no `999$c`), the rule finds no match and Koha adds a new bib. For copy records (with `999$c`), it finds the exact bib and attaches the `952` item without touching the bib fields.
 
 ---
 
