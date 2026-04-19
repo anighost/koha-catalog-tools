@@ -26,10 +26,16 @@ Status: ✅ Done
 ```bash
 rsync -av -e "ssh -p 2222" \
 --exclude='__pycache__' --exclude='*.db' \
+--exclude='koha_session_meta.json' \
 --exclude='uploads/' --exclude='output/' --exclude='sessions/' \
 /Users/anirbanghosh/Code/koha-catalog-tools/catalog-app/ \
 dishari@aluposto.ddns.net:/home/dishari/koha-catalog-tools/catalog-app/
 ```
+
+**Note:** `koha_session_meta.json` is excluded because the server copy is the
+live one (barcode counter increments with every run). Only sync it intentionally
+when you have new synonyms to deploy — commit locally first, then rsync just
+that file separately.
 
 Status: ✅ Done
 
@@ -261,6 +267,7 @@ git add catalog-app/ docs/ && git commit -m "..." && git push
 # 2. Rsync to server
 rsync -av -e "ssh -p 2222" \
 --exclude='__pycache__' --exclude='*.db' \
+--exclude='koha_session_meta.json' \
 --exclude='uploads/' --exclude='output/' --exclude='sessions/' \
 /Users/anirbanghosh/Code/koha-catalog-tools/catalog-app/ \
 dishari@aluposto.ddns.net:/home/dishari/koha-catalog-tools/catalog-app/
