@@ -580,7 +580,7 @@
 
     var hasErr = c.ERROR > 0;
     var hasUnresolved = false;
-    document.querySelectorAll('tr[data-status="FUZZY"]').forEach(function(tr) {
+    document.querySelectorAll('tr[data-status="FUZZY"], tr[data-status="DUPLICATE"]').forEach(function(tr) {
       var delH = tr.querySelector('.deleted-hidden');
       if (delH && delH.value === '1') return;
       var sel = tr.querySelector('.action-select');
@@ -593,7 +593,7 @@
       errMsg.innerHTML = '&#9888; Rows marked ERROR must have a title and author before processing.';
       errMsg.style.display = '';
     } else if (hasUnresolved) {
-      errMsg.innerHTML = '&#9888; All possible matches (FUZZY) require a decision — select an action for each.';
+      errMsg.innerHTML = '&#9888; All duplicate and possible match rows require an action — select one for each.';
       errMsg.style.display = '';
     } else {
       errMsg.style.display = 'none';
