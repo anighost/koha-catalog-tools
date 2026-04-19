@@ -824,108 +824,80 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
 # ── Koha item addition ─────────────────────────────────────────────────────
 def add_copy_item_to_koha(dup_barcode: str, copy_barcode: str, copy_num: int, meta: dict) -> tuple[bool, str]:
     """
-    Add a copy item to an existing Koha bib.
+    Add a copy item to an existing Koha bib via direct MySQL insertion.
 
-    Looks up biblionumber from the existing primary barcode (dup_barcode),
-    then inserts a new item with copy_barcode via Koha::Item Perl API.
+    Reads Koha MySQL credentials from koha-conf.xml, looks up the biblionumber
+    from the existing primary barcode, then inserts a new item row.
 
     Args:
         dup_barcode: primary barcode of existing book (10XXXX)
         copy_barcode: new copy barcode (11/12/13XXXX)
         copy_num: copy number (2, 3, or 4)
-        meta: dict with home_branch, hold_branch, item_type, call_no, date, ccode, cost
+        meta: dict with home_branch, hold_branch, item_type, call_no, date
 
     Returns: (success: bool, message: str)
     """
-    import tempfile
-    if not shlex.which('koha-shell'):
-        return False, 'koha-shell not found — not running on the Koha server.'
-
     try:
-        # Build Perl script to add item via direct SQL
-        home_branch = meta.get("home_branch", "DFL")
-        hold_branch = meta.get("hold_branch", "DFL")
-        item_type = meta.get("item_type", "BK")
-        call_no = meta.get("call_no", "891")
-        date_str = meta.get("date", "")
+        import xml.etree.ElementTree as ET
+        import mysql.connector
 
-        perl_script = f"""
-use strict;
-use warnings;
-use DBI;
+        # Read MySQL credentials from koha-conf.xml
+        koha_conf = '/etc/koha/sites/dishari_lib/koha-conf.xml'
+        tree = ET.parse(koha_conf)
+        root = tree.getroot()
 
-# Read DB config from Koha config
-my $koha_conf = '/etc/koha/sites/dishari_lib/koha-conf.xml';
-my ($host, $db, $user, $pass);
+        def get_elem(tag):
+            el = root.find(f'.//{tag}')
+            return el.text.strip() if el is not None and el.text else ''
 
-open(my $fh, '<', $koha_conf) or die "Cannot open $koha_conf: $!";
-while (<$fh>) {{
-    $host = $1 if /<hostname>([^<]+)<\/hostname>/;
-    $db = $1 if /<database>([^<]+)<\/database>/;
-    $user = $1 if /<user>([^<]+)<\/user>/;
-    $pass = $1 if /<pass>([^<]+)<\/pass>/;
-}}
-close($fh);
+        db_host = get_elem('hostname') or 'localhost'
+        db_name = get_elem('database')
+        db_user = get_elem('user')
+        db_pass = get_elem('pass')
 
-# Connect to MySQL
-my $dbh = DBI->connect("DBI:mysql:$db:$host", $user, $pass)
-    or die "DBI error: $DBI::errstr\\n";
+        if not (db_name and db_user):
+            return False, 'Could not read Koha MySQL credentials from koha-conf.xml'
 
-# Look up existing item
-my $sth = $dbh->prepare("SELECT biblionumber, biblioitemnumber FROM items WHERE barcode = ?");
-$sth->execute('{dup_barcode}') or die "Query error: " . $dbh->errstr . "\\n";
-my ($biblionumber, $biblioitemnumber) = $sth->fetchrow_array;
-$sth->finish;
+        # Connect to MySQL
+        cnx = mysql.connector.connect(
+            host=db_host,
+            user=db_user,
+            password=db_pass,
+            database=db_name
+        )
+        cursor = cnx.cursor()
 
-unless (defined $biblionumber) {{
-    print "ERROR: No item found with barcode {dup_barcode}\\n";
-    exit 1;
-}}
+        # Look up existing item by primary barcode
+        cursor.execute('SELECT biblionumber, biblioitemnumber FROM items WHERE barcode = %s', (dup_barcode,))
+        row = cursor.fetchone()
+        if not row:
+            return False, f'No item found with barcode {dup_barcode}'
 
-# Insert new item
-my $insert = $dbh->prepare(qq{{
-    INSERT INTO items
-    (biblionumber, biblioitemnumber, barcode, homebranch, holdingbranch,
-     itype, itemcallnumber, dateaccessioned, copynumber)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-}});
+        biblionumber, biblioitemnumber = row
 
-$insert->execute(
-    $biblionumber,
-    $biblioitemnumber,
-    '{copy_barcode}',
-    '{home_branch}',
-    '{hold_branch}',
-    '{item_type}',
-    '{call_no}',
-    '{date_str}',
-    {copy_num}
-) or die "Insert error: " . $dbh->errstr . "\\n";
+        # Insert new item
+        home_branch = meta.get('home_branch', 'DFL')
+        hold_branch = meta.get('hold_branch', 'DFL')
+        item_type = meta.get('item_type', 'BK')
+        call_no = meta.get('call_no', '891')
+        date_str = meta.get('date', '')
 
-print "OK\\n";
-$dbh->disconnect;
-"""
-        # Write script to temp file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.pl', delete=False) as f:
-            f.write(perl_script)
-            script_path = f.name
+        cursor.execute('''
+            INSERT INTO items
+            (biblionumber, biblioitemnumber, barcode, homebranch, holdingbranch,
+             itype, itemcallnumber, dateaccessioned, copynumber)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (biblionumber, biblioitemnumber, copy_barcode, home_branch, hold_branch,
+              item_type, call_no, date_str, copy_num))
 
-        try:
-            # Run via koha-shell
-            cmd = [
-                'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
-                f'perl {shlex.quote(script_path)}'
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True,
-                                   stdin=subprocess.DEVNULL, timeout=60)
-            if result.returncode == 0 and 'OK' in result.stdout:
-                return True, f'Copy item added: barcode {copy_barcode}'
-            return False, f'Failed to add copy item:\n{result.stderr or result.stdout}'
-        finally:
-            Path(script_path).unlink(missing_ok=True)
+        cnx.commit()
+        cursor.close()
+        cnx.close()
+
+        return True, f'Copy item added: barcode {copy_barcode}'
 
     except Exception as exc:
-        return False, f'Error adding copy item: {exc}'
+        return False, f'Error adding copy item: {str(exc)}'
 
 
 # ── Koha import ────────────────────────────────────────────────────────────
