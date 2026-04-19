@@ -700,7 +700,7 @@ No dedup review is needed for these copy columns — they are already part of th
 
 **Koha import settings:**
 - Match rule: **KohaBiblio** (matches on `999$c` → Local-Number)
-- Action on match: **Ignore incoming record (not recommended)**
+- Action on match: **Ignore incoming record (keep existing)**
   - This preserves the existing bib exactly and only attaches the new `952` item.
 - Action on no match: **Add incoming record** (fallback if `999$c` lookup failed — see §C4)
 - Item handling: **Always add items**
@@ -736,3 +736,40 @@ The `999$c` match ensures Koha finds the exact existing bib and skips the incomi
 | C5 | FUZZY match threshold is too loose — wrong copy attached | The fuzzy title threshold (80%) and author threshold (72%) are conservative enough for Bengali transliteration variants. A `~80%` match still requires the same longest word in the title. Volume conflict detection (`_volumes_conflict`) prevents "Sanchayita Vol.1" from matching "Sanchayita Vol.2". Edition conflict detection prevents different editions from fuzzy-matching. Residual risk is handled by the mandatory FUZZY review step. |
 | C6 | User tries to add a 5th copy (max exceeded) | `next_copy_action()` checks `books.copies` and returns `'skip'` when `copies >= 4`. The review page action dropdown shows "Skip (max 4 copies reached)". The row is skipped in processing. |
 | C7 | Two concurrent uploads both try to assign Copy 2 to the same book | `FileLock(LOCK_FILE)` serializes `catalog_engine.run()` (barcode counter). Copy barcode assignment uses `FileLock` + `SQLite BEGIN EXCLUSIVE` — the second request re-reads `copies` inside the lock and gets the updated count. Both requests succeed but assign Copy 2 and Copy 3 respectively, not two Copy 2s. |
+
+---
+
+## 18. Operational Procedures
+
+### 18.1 Registry Cleanup and Backfill
+
+Use this procedure when the registry needs to be resynced with Koha's live data — for example after deleting test imports, after direct Koha imports that bypassed the app (see C3), or after bulk bib merges.
+
+**When to run:**
+- Test records were imported and then deleted from Koha Staff Interface
+- Books were imported directly into Koha (not via this app), creating registry gaps
+- After merging duplicate bibs in Koha Staff (the 42 known duplicates)
+
+**Steps (on the server):**
+
+```bash
+# Step 1 — Clear the registry
+sqlite3 /home/dishari/koha-catalog-tools/catalog-app/dedup_registry.db "DELETE FROM books;"
+
+# Step 2 — Re-seed from Koha's live data
+sudo python3 /home/dishari/koha-catalog-tools/catalog-app/backfill_registry.py
+```
+
+The backfill script queries `biblio`, `biblioitems`, and `items` via `sudo mysql` and inserts one registry row per bib that has at least one primary barcode (`10XXXX`). It uses `INSERT OR IGNORE` so re-running without the `DELETE` is safe — existing rows are kept and only new ones are added.
+
+**Expected output:**
+```
+Reading Koha config from /etc/koha/sites/dishari_lib/koha-conf.xml …
+Using database: koha_dishari_lib (connecting via sudo mysql)
+Fetched 1709 bibs from Koha
+Done — inserted 1667 new rows, skipped 42 already present.
+```
+
+The "skipped" count reflects bibs with duplicate normalized title+author+edition in Koha (hitting the `idx_dedup` unique constraint). These should be merged in Koha Staff → Cataloging → Merge Records; after merging, re-run the backfill.
+
+**Barcode gap after deleting test records:** The `last_primary_barcode` counter in `koha_session_meta.json` is not rolled back. The next real import will skip the gap barcodes — this is harmless since barcodes only need to be unique, not contiguous.
