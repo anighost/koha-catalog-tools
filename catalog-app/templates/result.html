@@ -7,9 +7,7 @@
 
     <!-- Result card -->
     <div class="dfl-card p-4 mb-3">
-      <div class="section-title">
-        {% if r.import_ok %}Import Complete{% else %}Processing Complete{% endif %}
-      </div>
+      <div class="section-title">Processing Complete</div>
       <p class="text-muted mb-4" style="font-size:0.8rem">{{ filename }}</p>
 
       <!-- Stats -->
@@ -40,26 +38,15 @@
         {% endif %}
       </div>
 
-      <!-- Koha import status -->
-      {% if r.import_ok %}
-      <div class="mb-4 p-3"
-           style="background:#f0faf6;border:1px solid #b7ddd0;border-radius:8px;font-size:0.83rem">
-        <strong style="color:#2e7d6b">&#10003; Imported to Koha successfully.</strong><br>
-        <span class="text-muted">Books are now searchable in the OPAC.</span>
-        {% if r.import_msg %}
-        <pre class="mt-2 mb-0"
-             style="font-size:0.72rem;white-space:pre-wrap;background:rgba(0,0,0,0.04);
-                    padding:8px 10px;border-radius:6px;color:var(--text-muted);
-                    max-height:200px;overflow-y:auto">{{ r.import_msg }}</pre>
-        {% endif %}
-      </div>
-      {% elif r.import_msg %}
+      <!-- Manual import instructions -->
+      {% if r.mrc_path %}
       <div class="mb-4 p-3"
            style="background:#fdf6e3;border:1px solid #f0d070;border-radius:8px;font-size:0.83rem">
-        <strong>&#9888; Koha import was not completed automatically.</strong><br>
-        <span class="text-muted">{{ r.import_msg }}</span><br><br>
-        <span class="text-muted">Download the MARC file and import it manually:<br>
-        <em>Koha Staff Interface &rarr; Cataloging &rarr; Stage MARC Records for Import</em></span>
+        <strong>Next step: import to Koha manually</strong><br>
+        <span class="text-muted">
+          Download the MARC file below, then go to:<br>
+          <em>Koha Staff Interface &rarr; Cataloging &rarr; Stage MARC Records for Import</em>
+        </span>
       </div>
       {% endif %}
 
@@ -80,12 +67,6 @@
         <a href="{{ url_for('download', sid=sid, filetype='errors') }}"
            class="btn btn-ghost btn-sm" style="border-color:var(--crimson);color:var(--crimson)">
           &#11015;&nbsp; Error rows
-        </a>
-        {% endif %}
-        {% if r.labels_path %}
-        <a href="{{ url_for('download', sid=sid, filetype='labels') }}"
-           class="btn btn-ghost btn-sm">
-          &#11015;&nbsp; Labels PDF
         </a>
         {% endif %}
       </div>

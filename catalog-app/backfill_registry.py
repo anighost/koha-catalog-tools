@@ -1,16 +1,17 @@
 """
 backfill_registry.py
-Run once on the Koha server to seed the SQLite dedup registry from
-Koha's MySQL biblio/items tables.
+Seed (or re-seed) the SQLite dedup registry from Koha's MySQL biblio/items tables.
 
-Reads MySQL credentials automatically from Koha's config file:
-  /etc/koha/sites/<KOHA_INSTANCE>/koha-conf.xml
+Reads the database name from koha-conf.xml; connects via 'sudo mysql' (root access,
+no password required — requires the sudoers rule for mysql to be in place).
 
 Usage:
+    # Clear registry and reload fresh from Koha:
+    sqlite3 /home/dishari/koha-catalog-tools/catalog-app/dedup_registry.db \
+        "DELETE FROM books;"
     python3 /home/dishari/koha-catalog-tools/catalog-app/backfill_registry.py
 
-Safe to re-run — uses INSERT OR IGNORE so existing registry rows are never
-overwritten.
+Safe to re-run without DELETE — uses INSERT OR IGNORE so existing rows are kept.
 """
 
 import re, sqlite3, subprocess, sys, xml.etree.ElementTree as ET
@@ -61,74 +62,45 @@ def normalize_edition(text: str) -> str:
     return s
 
 
-# ── Read MySQL credentials from koha-conf.xml ──────────────────────────────
+# ── Read DB name from koha-conf.xml ───────────────────────────────────────
 
-def read_koha_db_config(conf_path: str) -> dict:
+def read_koha_db_name(conf_path: str) -> str:
+    """Read only the database name from koha-conf.xml.
+    MySQL access uses 'sudo mysql' (root) — no user/pass needed."""
     try:
         tree = ET.parse(conf_path)
         root = tree.getroot()
-        # Credentials live inside <config><database> or directly under <config>
-        def _get(tag):
-            el = root.find(f'.//{tag}')
-            return el.text.strip() if el is not None and el.text else ''
-        # Koha config may have multiple user/pass blocks; find the one
-        # that matches the instance database name pattern (koha_<instance>)
         instance = KOHA_INSTANCE.replace('-', '_')
-        all_users = [el.text.strip() for el in root.findall('.//user') if el.text]
-        all_passes = [el.text.strip() for el in root.findall('.//pass') if el.text]
-        all_dbs   = [el.text.strip() for el in root.findall('.//database') if el.text]
-
-        # Prefer the user/db that contains the instance name
-        user = next((u for u in all_users if instance in u), all_users[0] if all_users else '')
-        db   = next((d for d in all_dbs   if instance in d), all_dbs[0]   if all_dbs   else '')
-        idx  = all_users.index(user) if user in all_users else 0
-        passwd = all_passes[idx] if idx < len(all_passes) else (all_passes[0] if all_passes else '')
-
-        return {
-            'host':   _get('hostname') or _get('host') or 'localhost',
-            'port':   _get('port') or '3306',
-            'user':   user,
-            'passwd': passwd,
-            'db':     db,
-        }
+        all_dbs = [el.text.strip() for el in root.findall('.//database') if el.text]
+        db = next((d for d in all_dbs if instance in d), all_dbs[0] if all_dbs else '')
+        if not db:
+            print(f"ERROR: could not find database name in {conf_path}")
+            sys.exit(1)
+        return db
     except Exception as e:
         print(f"ERROR reading {conf_path}: {e}")
         sys.exit(1)
 
 
-# ── Query Koha MySQL via subprocess (mysql CLI) ────────────────────────────
+# ── Query Koha MySQL via subprocess (sudo mysql — root access, no password) ─
 
-def fetch_koha_books(cfg: dict) -> list[dict]:
+def fetch_koha_books(db_name: str) -> list[dict]:
     """
     Return one row per bib that has at least one item with a primary barcode
     (starts with '10').  Aggregates copy count across all items.
     """
-    sql = """
-SELECT
-    b.biblionumber,
-    b.title,
-    b.author,
-    bi.isbn,
-    bi.editionstatement,
-    MIN(CASE WHEN i.barcode LIKE '10%' THEN i.barcode END) AS primary_barcode,
-    COUNT(i.itemnumber) AS copies
-FROM biblio b
-JOIN biblioitems bi USING(biblionumber)
-LEFT JOIN items i USING(biblionumber)
-GROUP BY b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement
-HAVING primary_barcode IS NOT NULL;
-""".strip()
+    sql = (
+        "SELECT b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement,"
+        " MIN(CASE WHEN i.barcode LIKE '10%' THEN i.barcode END) AS primary_barcode,"
+        " COUNT(i.itemnumber) AS copies"
+        " FROM biblio b"
+        " JOIN biblioitems bi USING(biblionumber)"
+        " LEFT JOIN items i USING(biblionumber)"
+        " GROUP BY b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement"
+        " HAVING primary_barcode IS NOT NULL;"
+    )
 
-    cmd = [
-        'mysql',
-        f'-h{cfg["host"]}',
-        f'-P{cfg["port"]}',
-        f'-u{cfg["user"]}',
-        f'-p{cfg["passwd"]}',
-        '--batch', '--raw', '--skip-column-names',
-        cfg['db'],
-        '-e', sql,
-    ]
+    cmd = ['sudo', 'mysql', db_name, '-N', '--batch', '-e', sql]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -198,13 +170,10 @@ def backfill(books: list[dict]) -> tuple[int, int]:
 
 def main():
     print(f"Reading Koha config from {KOHA_CONF} …")
-    cfg = read_koha_db_config(KOHA_CONF)
-    if not cfg['user'] or not cfg['db']:
-        print("ERROR: could not read DB credentials from koha-conf.xml")
-        sys.exit(1)
-    print(f"Connecting to MySQL {cfg['db']} at {cfg['host']}:{cfg['port']} …")
+    db_name = read_koha_db_name(KOHA_CONF)
+    print(f"Using database: {db_name} (connecting via sudo mysql)")
 
-    books = fetch_koha_books(cfg)
+    books = fetch_koha_books(db_name)
     print(f"Fetched {len(books)} bibs from Koha")
 
     if not books:

@@ -46,15 +46,13 @@ The catalog app provides: **upload → OCR-error review → duplicate detection 
      │  splits rows: new_books list + copy_rows list
      │  calls catalog_engine.run() → clean_catalog.py subprocess
      │  merges MARC bytes (new books + copy records)
-     │  calls bulkmarcimport.pl on Koha server
      │  registers new books in dedup_registry.db
-     │  creates label batch PDF (if import succeeded) via create_label_batch.pl
      ▼
   /result/<sid>
      │  shows: N new books · M copies added · K skipped · W errors
-     │  download buttons: MARC file · audit XLSX · error rows XLSX · Labels PDF
+     │  download buttons: MARC file · audit XLSX · error rows XLSX
      ▼
-  [done — books searchable in Koha OPAC; labels ready to print]
+  [operator downloads .mrc, imports manually via Koha Staff → Stage MARC Records]
 ```
 
 ---
@@ -107,8 +105,8 @@ The main UX screen. A server-rendered editable table — one row per book.
 | `ERROR` | Red | Missing required field (title or author); blocks processing |
 
 **DUPLICATE row behavior — registry match (`dup_source='registry'`):**
-- Action dropdown pre-selects the next logical copy (Copy 2 if 1 exists, Copy 3 if 2 exist, etc.)
-- If already at 4 copies, pre-selects Skip
+- Action dropdown defaults to `— Select action —` (no pre-selection); user must explicitly choose Skip or Add as Copy 2/3/4
+- If already at 4 copies, the Copy 2/3/4 options are hidden and only Skip is available
 - Clicking the badge opens a popover showing full existing record details (title, author, publisher, year, ISBN, all copy barcodes)
 - Dup-info panel shows existing title + barcode
 
@@ -142,8 +140,8 @@ The main UX screen. A server-rendered editable table — one row per book.
 
 **Bottom bar:**
 - Summary counts: `3 new · 1 duplicate · 2 possible matches · 1 error`
-- "Process & Import to Koha" button — disabled if any ERROR rows remain OR any FUZZY rows have unresolved `— Select action —`
-- Clicking the button opens a **confirmation modal** showing: N new books · M copy additions · K duplicates to skip · P excluded rows. User must click "Confirm & Import" to actually submit. If nothing would be imported (all skipped/excluded), a warning is shown in the modal.
+- "Generate MARC →" button — disabled if any ERROR rows remain OR any FUZZY rows have unresolved `— Select action —`
+- Clicking the button opens a **confirmation modal** showing: N new books · M copy additions · K duplicates to skip · P excluded rows. User must click "Confirm →" to actually submit. If nothing would be imported (all skipped/excluded), a warning is shown in the modal.
 
 **bfcache / back-button safety:**
 - A `pageshow` listener hides the processing overlay if the browser restores the review page from the bfcache (back-button navigation). Without this, the spinner would be frozen on screen.
@@ -170,10 +168,9 @@ Shows a summary card with counters:
 | Errors | Red | Rows that failed processing |
 | Already registered | Amber | Books the engine processed but were already in the dedup registry |
 
-- Koha import status: green "Imported successfully" or amber "Not completed — import manually"
-- Full scrollable import log (no truncation)
-- Download buttons: MARC file (`.mrc`) · Audit spreadsheet · Error rows spreadsheet · Labels PDF (if created)
-- Labels PDF button: visible only when import succeeded; PDF contains barcode spine labels formatted for Avery 5160 sheets using the "Dishari Label" layout (configured via `KOHA_LABEL_TEMPLATE_ID=1` and `KOHA_LABEL_LAYOUT_ID=17`)
+- Download buttons: MARC file (`.mrc`) · Audit spreadsheet · Error rows spreadsheet
+- Manual import instruction box: "Download the MARC file below, then go to: Koha Staff Interface → Cataloging → Stage MARC Records for Import"
+- Processing log (collapsible pre block) — shown only if there were engine errors
 - "Process another file" link back to upload
 
 ---
@@ -456,19 +453,8 @@ Form submitted (row_count, per-row: status, action, title, author, isbn, year, p
         │
         ├── Write merged mrc_bytes → output/<sid>.mrc
         │
-        ├── import_to_koha(mrc_path):
-        │       sudo koha-shell <instance> -c
-        │           "bulkmarcimport.pl -b -file <path> -match <rule> -insert -update -items"
-        │       Returns (success, log_output)
-        │
-        ├── create_label_pdf(label_barcodes, pdf_path) [ONLY if import succeeded]:
-        │       Collects all inserted new-book barcodes + copy barcodes
-        │       sudo koha-shell <instance> -c
-        │           "perl /path/to/create_label_batch.pl barcode1,barcode2,... template_id layout_id output.pdf"
-        │       Perl script creates Koha label batch in DB + generates PDF via C4::Creators::PDF
-        │       Returns (success, batch_id:items_added)
-        │
         └── Save result → session, redirect to /result/<sid>
+            [operator downloads .mrc and imports manually via Koha Staff UI]
 ```
 
 ### FUZZY_NEW sentinel
@@ -501,60 +487,53 @@ Fields included:
 | Tag | Content | Purpose |
 |-----|---------|---------|
 | 020 | ISBN | Fallback match key |
-| 100 | Author | STRICT_CLE match |
-| 245 | Title | STRICT_CLE match |
-| 250 | Edition | STRICT_CLE match |
-| 260 | Place / Publisher / Year | STRICT_CLE match |
+| 100 | Author | Secondary match field |
+| 245 | Title | Secondary match field |
+| 250 | Edition | Secondary match field |
+| 260 | Place / Publisher / Year | Secondary match field |
 | 942 | Item type code | Koha bib-level |
+| 999 | biblionumber | **Primary match key** → Local-Number (KohaBiblio rule); omitted if `get_biblionumber` returns `''` |
 | 952 | Item/holdings | `$a` home branch · `$b` hold branch · `$p` barcode · `$o` call no · `$d` date · `$y` item type · `$t` copy number · `$8` collection code · `$g` cost |
 
----
-
-## 10. Koha Import Mechanism
-
-```python
-cmd = [
-    'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
-    f'bulkmarcimport.pl -b -file {shlex.quote(mrc_path)}'
-    f' -match {shlex.quote(KOHA_MATCH_RULE)} -insert -update -items'
-]
-subprocess.run(cmd, timeout=180)
-```
-
-- Requires a sudoers rule: `dishari ALL=(root) NOPASSWD: /usr/sbin/koha-shell dishari_lib -c *`
-- If `koha-shell` is not on PATH (e.g. local dev), returns a graceful "not on Koha server" message — the user can download the MARC file and import manually via Koha Staff UI
+The `999$c` biblionumber is the reliable match key. The other bib fields are included so the record is self-contained and readable, and as a fallback if `999$c` is absent (see §C4 in §17).
 
 ---
 
-## 11. Label PDF Generation (`create_label_batch.pl`)
+## 10. Koha Import Mechanism (Manual)
 
-After a successful Koha import, the app invokes a Perl script to create a label batch and export a PDF:
+The app does **not** auto-import to Koha. After processing, the operator downloads the `.mrc` file and imports it manually:
 
-```perl
-# Pseudo-code logic (see create_label_batch.pl)
-create_batch(batch_id = max+1, items = insert rows for each barcode)
-template = C4::Labels::Template->retrieve(template_id, profile_id => 1)
-layout   = C4::Labels::Layout->retrieve(layout_id)
-batch    = C4::Labels::Batch->retrieve(batch_id)
-pdf      = C4::Creators::PDF->new()
+1. Koha Staff Interface → **Cataloging → Stage MARC Records for Import**
+2. Upload the `.mrc` file
+3. Configure staging options:
+   - **Match rule:** `KohaBiblio` (matches on `999$c` → Local-Number)
+   - **Action on match:** `Replace existing record with incoming record` (for new books, no match is found so this is a no-op; for copy records it preserves the existing bib)
+   - **Action on no match:** `Add incoming record`
+   - **Item handling:** `Always add items`
+4. Click **Stage for import**, then **Import this batch**
 
-for each item in batch:
-    label = C4::Labels::Label->new(item_number, template, layout, ...)
-    pdf->Add(label->draw_guide_box)
-    pdf->Text(label->create_label())
+**Why manual import:** Auto-import via `bulkmarcimport.pl` required sudoers + `koha-shell` access and was hard to debug when it failed silently. Manual import via Koha Staff UI gives the operator a visible confirmation step and is safer for production use.
 
-pdf->End() → write to file
-```
+**KohaBiblio match rule configuration:**
+| Match point | Tag | Subfield | Index | Score |
+|-------------|-----|----------|-------|-------|
+| Local-Number | 999 | c | Local-Number | 100 |
 
-**Script location:** `catalog-app/create_label_batch.pl`  
-**Invoked via:** `sudo koha-shell <instance> -c perl /path/to/create_label_batch.pl barcodes... template_id layout_id output.pdf`  
-**Template ID:** Configured via `KOHA_LABEL_TEMPLATE_ID` env var (default: `1` = "Avery 5160 | 1 x 2-5/8")  
-**Layout ID:** Configured via `KOHA_LABEL_LAYOUT_ID` env var (default: `17` = "Dishari Label")  
-**Barcode source:** All new-book barcodes (10XXXX) + all copy barcodes (11/12/13XXXX) from the batch  
-**Output:** A print-ready PDF written to `output/<sid>_labels.pdf` (downloaded from result page)
+Required score: 100. This means only `999$c` is used for matching. For new books (no `999$c`), the rule finds no match and Koha adds a new bib. For copy records (with `999$c`), it finds the exact bib and attaches the `952` item.
 
-**Gunicorn timeout:** Set to `--timeout 300` (label PDF generation can take up to 60 seconds)
-- Timeout: 3 minutes; returns full stdout+stderr as the import log on the result page
+---
+
+## 11. Label Printing
+
+Label printing is handled directly in the Koha Staff Interface after import:
+
+1. After importing the MARC batch, go to **Koha Staff → Tools → Label Creator → Manage Batches**
+2. Select the batch that was just imported, click **Print labels**
+3. Choose the "Dishari Label" layout (ID 17) and "Avery 5160 | 1 x 2-5/8" template (ID 1)
+
+The catalog app does **not** generate label PDFs. This was previously implemented via a `create_label_batch.pl` Perl script but was removed because:
+- The `/tmp` sticky-bit ownership difference between `dishari` and `dishari_lib-koha` caused `PermissionError` on temp file cleanup
+- Manual label generation in Koha Staff UI is more reliable and allows reprinting individual labels
 
 ---
 
@@ -610,7 +589,7 @@ All uploaded and generated files are temporary. `_cleanup_old_files()` runs at m
 | GET | `/` | Yes | Upload page |
 | POST | `/upload` | Yes | Parse file, build review rows, redirect |
 | GET | `/review/<sid>` | Yes | Review/edit table |
-| POST | `/process/<sid>` | Yes | Run pipeline, import to Koha |
+| POST | `/process/<sid>` | Yes | Run pipeline, generate MARC output |
 | GET | `/result/<sid>` | Yes | Show import summary |
 | GET | `/download/<sid>/<filetype>` | Yes | Download mrc / audit / errors |
 | GET | `/api/dedup` | Yes | AJAX dedup check (title, author, isbn params) |
@@ -655,3 +634,103 @@ rapidfuzz      Fuzzy string matching for dedup stage 3
 | 500-row upload cap | Beyond ~500 rows the review table becomes difficult to navigate. Gronthee batches should naturally be smaller (single scanning session). Larger files should be split upstream. |
 | LIKE pre-filter before rapidfuzz (Stage 3) | Full table scan × every uploaded row is O(N×M). The longest significant word (> 3 chars) is a highly selective filter; for 80%+ similar titles it almost always appears in both. Reduces 5,000-candidate scans to < 20 in typical cases. |
 | Confirm modal before process | One-click import with no summary is risky at scale — a misclick could import hundreds of books with wrong data. The modal gives volunteers a final checkpoint showing exact counts. |
+| Manual MARC import (not auto-import) | Auto-import via `bulkmarcimport.pl` required a sudoers rule and Koha-shell access, which introduced permission risks and hard-to-debug failures. Manual "Stage MARC Records" via Koha Staff UI gives the operator a final review step before records are committed and is safer for production use. |
+| `999$c` biblionumber in copy MARC | STRICT_CLE match rule relies on Zebra index names (Publisher, Edition) that either don't exist or don't match Koha's actual DOM index configuration. `999$c` → Local-Number is always indexed and uniquely identifies the bib, making copy attachment 100% reliable without any match rule tuning. |
+| `get_biblionumber` uses `sudo mysql` | Koha's `kohauser` MySQL account is restricted to connections from within `koha-shell`. Reading `koha-conf.xml` for credentials then calling mysql as `dishari` fails with access denied. `sudo mysql <dbname> -N --batch -e '...'` uses root's implicit MySQL access without requiring a password. |
+
+---
+
+## 17. MARC Generation Use Cases & Import Flow
+
+This section documents all the cases the app must handle when generating MARC output and how each maps to a Koha import action.
+
+### Case 1 — New Book (full MARC via `clean_catalog.py`)
+
+**Trigger:** Row status is `NEW` or `FUZZY_NEW` (user chose "Import as new book" for a FUZZY row).
+
+**Pipeline:**
+1. All NEW rows from the upload are written to a temporary XLSX file.
+2. `catalog_engine.run()` patches `clean_catalog.py` constants and runs it as a subprocess.
+3. `clean_catalog.py` generates a full MARC21 record containing: `020` ISBN · `041` language · `100` author · `245` title · `250` edition · `260` place/publisher/year · `300` pages · `500` notes · `650`×5 subjects · `830` series · `942` bib item type · `952` item/holdings.
+4. A new primary barcode (`10XXXX`) is assigned by incrementing `last_primary_barcode` in `koha_session_meta.json` (protected by FileLock).
+5. The book is registered in `dedup_registry.db`.
+
+**Koha import settings (manual Stage MARC Records):**
+- Match rule: **KohaBiblio** (matches on `999$c` → Local-Number)
+- Action on match: **Replace existing record with incoming record**
+- Action on no match: **Add incoming record**
+- Item handling: **Always add items**
+
+Since a new book has no `999$c` in its MARC record, Koha finds no match and adds a new bib + item. The `952` field is stripped from the bib record and added as an item row.
+
+---
+
+### Case 2 — Gronthee Embedded Copies (multiple `952` on one bib record)
+
+**Trigger:** The Gronthee export has copy trigger columns filled (cols 37–39, `COL_COPY2/3/4`). This is the standard Gronthee workflow when a volunteer scans the same book multiple times.
+
+**Pipeline:**
+1. `clean_catalog.py` detects filled copy columns and appends additional `952` fields to the same MARC record — one per copy, each with its own barcode (`11XXXX`, `12XXXX`, `13XXXX`).
+2. The single MARC record contains: one set of bib fields (100/245/etc.) + multiple `952` items.
+3. The primary `10XXXX` barcode is registered in the dedup registry; copy barcodes are not tracked (§C2).
+
+**Koha import settings:** Same as Case 1. Since no `999$c` exists, Koha adds a new bib and all `952` items are attached to it.
+
+No dedup review is needed for these copy columns — they are already part of the same Gronthee row and `clean_catalog.py` handles them in a single pass.
+
+---
+
+### Case 3 — Add Physical Copy via Separate Upload (copy MARC via `generate_copy_marc`)
+
+**Trigger:** A book is already in the dedup registry AND already in Koha. A volunteer uploads a new Gronthee export that includes the same book again (ISBN or title+author match). The row shows as `DUPLICATE`. The user selects "Add as Copy 2", "Add as Copy 3", or "Add as Copy 4" from the action dropdown.
+
+**Pipeline:**
+1. The app derives the copy barcode: replace the first two digits of the primary barcode with the copy prefix (`11`, `12`, `13`).
+2. `get_biblionumber(primary_barcode)` queries the Koha `items` table via `sudo mysql` to find the `biblionumber` of the existing bib.
+3. `catalog_engine.generate_copy_marc()` builds a minimal MARC record containing:
+   - `020` ISBN (fallback match)
+   - `100` author, `245` title, `250` edition, `260` publisher/year (secondary match fields)
+   - `942` bib item type
+   - **`999$c` biblionumber** (primary match key → Local-Number in Koha)
+   - `952` item/holdings with the new copy barcode, copy number (`$t`), branch, call number, date, cost
+4. The registry `copies` count is incremented atomically (FileLock + SQLite EXCLUSIVE).
+5. Copy MARC bytes are merged into the final `.mrc` output alongside any new-book records.
+
+**Koha import settings:**
+- Match rule: **KohaBiblio** (matches on `999$c` → Local-Number)
+- Action on match: **Ignore incoming record (not recommended)**
+  - This preserves the existing bib exactly and only attaches the new `952` item.
+- Action on no match: **Add incoming record** (fallback if `999$c` lookup failed — see §C4)
+- Item handling: **Always add items**
+
+The `999$c` match ensures Koha finds the exact existing bib and skips the incoming minimal bib fields, attaching only the new `952` item.
+
+---
+
+### Case 4 — FUZZY Match (mandatory user review)
+
+**Trigger:** Stage 3 of `lookup_dup` returns a candidate with combined score ≥ threshold but Stage 1 and Stage 2 found no match. Typical causes: OCR errors in title or author, minor publisher name variants, edition info present in one source but absent in the other.
+
+**Review page behaviour:**
+- Row shows a `FUZZY` badge with confidence score (e.g. `~87% match`).
+- Action dropdown defaults to `— Select action —` (blocks the Process button).
+- The user must explicitly choose one of:
+  - **Skip** — treat as duplicate, don't import anything for this row
+  - **Add as Copy 2/3/4** — treat as the same physical book, add a copy (routes through Case 3 pipeline)
+  - **Import as new book** — treat as a genuinely different book, routes through Case 1 pipeline
+
+**Why forced review matters:** A FUZZY row could be either a true duplicate with OCR noise or a legitimately different book (e.g. a sequel with a similar title). Pre-selecting Skip risks silently losing a real new book. Pre-selecting "Import as new book" risks creating a duplicate bib in Koha. Only a human who can see the physical book can decide.
+
+---
+
+### Corner Cases
+
+| ID | Scenario | Behaviour |
+|----|----------|-----------|
+| C1 | Book is in the registry but the incoming upload has a different barcode for it | Detected by `register_books()`: `INSERT OR IGNORE` skips the insert; a barcode mismatch warning is logged and shown in the processing log. The existing registry entry is preserved. The MARC file still includes the new record — Koha import replaces the bib on match, but the item row uses the new barcode. |
+| C2 | Copy barcode not tracked in dedup registry | Only primary `10XXXX` barcodes are stored in `books.barcode`. Copy barcodes (`11/12/13XXXX`) are tracked implicitly via `books.copies`. If a copy is added, the registry `copies` counter increments; the copy barcode itself is not a separate row. A subsequent upload of the same book will still show as `DUPLICATE` (primary barcode match) and offer Copy 3/4 if applicable. |
+| C3 | Book is in Koha but was never processed through this app (imported bypassing the registry) | `lookup_dup` finds no registry entry → row shows as `NEW`. The app imports a second bib record. This creates a duplicate bib in Koha. **Mitigation:** run `backfill_registry.py` after any direct Koha import to sync the registry from Koha's `items` table. |
+| C4 | `get_biblionumber` fails (MySQL unavailable, barcode not yet in Koha) | Returns `''` silently. `generate_copy_marc` omits `999$c`. Koha has no Local-Number to match on. With KohaBiblio rule and no match, the action depends on import settings: if "Add incoming record" is selected, Koha creates a new minimal bib (author+title+952 only) rather than attaching to the existing bib. **Workaround:** the operator should verify the primary barcode is in Koha before adding copies from a separate upload. |
+| C5 | FUZZY match threshold is too loose — wrong copy attached | The fuzzy title threshold (80%) and author threshold (72%) are conservative enough for Bengali transliteration variants. A `~80%` match still requires the same longest word in the title. Volume conflict detection (`_volumes_conflict`) prevents "Sanchayita Vol.1" from matching "Sanchayita Vol.2". Edition conflict detection prevents different editions from fuzzy-matching. Residual risk is handled by the mandatory FUZZY review step. |
+| C6 | User tries to add a 5th copy (max exceeded) | `next_copy_action()` checks `books.copies` and returns `'skip'` when `copies >= 4`. The review page action dropdown shows "Skip (max 4 copies reached)". The row is skipped in processing. |
+| C7 | Two concurrent uploads both try to assign Copy 2 to the same book | `FileLock(LOCK_FILE)` serializes `catalog_engine.run()` (barcode counter). Copy barcode assignment uses `FileLock` + `SQLite BEGIN EXCLUSIVE` — the second request re-reads `copies` inside the lock and gets the updated count. Both requests succeed but assign Copy 2 and Copy 3 respectively, not two Copy 2s. |

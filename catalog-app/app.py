@@ -4,7 +4,7 @@ Flask app: upload Gronthee XLSX → review & fix OCR errors → dedup check →
 process via clean_catalog.py → one-click import to Koha.
 """
 
-import json, logging, os, re, secrets, shlex, shutil, sqlite3, subprocess, tempfile, time, uuid
+import json, logging, os, re, secrets, shutil, sqlite3, subprocess, tempfile, time, uuid
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -27,10 +27,7 @@ for d in (SESSIONS_DIR, UPLOADS_DIR, OUTPUT_DIR):
 
 CATALOG_PASSWORD  = os.environ.get('CATALOG_PASSWORD', 'changeme')
 KOHA_INSTANCE     = os.environ.get('KOHA_INSTANCE', 'dishari_lib')
-KOHA_MATCH_RULE   = os.environ.get('KOHA_MATCH_RULE', 'STRICT_CLE')
-KOHA_LABEL_TEMPLATE_ID = int(os.environ.get('KOHA_LABEL_TEMPLATE_ID', '1'))   # Avery 5160 | 1 x 2-5/8
-KOHA_LABEL_LAYOUT_ID   = int(os.environ.get('KOHA_LABEL_LAYOUT_ID',   '17'))  # Dishari Label
-LABEL_SCRIPT        = BASE_DIR / 'create_label_batch.pl'
+KOHA_CONF         = f'/etc/koha/sites/{KOHA_INSTANCE}/koha-conf.xml'
 
 # Column indices — must match clean_catalog.py
 COL_ISBN        = 0
@@ -244,14 +241,10 @@ def clean_isbn(isbn: str) -> str:
 
 def next_copy_action(copies: int) -> str:
     """
-    Given the number of copies already in the registry, return the action to
-    pre-select in the review dropdown.
-      1 copy  (10xxxx only)  → add copy 2  (11xxxx)
-      2 copies               → add copy 3  (12xxxx)
-      3 copies               → add copy 4  (13xxxx)
-      4+ copies              → skip (barcode scheme maxes out at 4 copies)
+    Always return 'review' so the action dropdown defaults to '— Select action —'.
+    User must explicitly choose copy2/copy3/copy4/skip — no silent pre-selection.
     """
-    return {1: 'copy2', 2: 'copy3', 3: 'copy4'}.get(copies, 'skip')
+    return 'review'
 
 
 def clean_year(year: str) -> str:
@@ -821,175 +814,6 @@ def build_review_rows(raw_rows: list[list], source_file: str) -> list[dict]:
     return review
 
 
-# ── Koha item addition ─────────────────────────────────────────────────────
-def add_copy_item_to_koha(dup_barcode: str, copy_barcode: str, copy_num: int, meta: dict) -> tuple[bool, str]:
-    """
-    Add a copy item to an existing Koha bib via direct MySQL insertion.
-
-    Reads Koha MySQL credentials from koha-conf.xml, looks up the biblionumber
-    from the existing primary barcode, then inserts a new item row.
-
-    Args:
-        dup_barcode: primary barcode of existing book (10XXXX)
-        copy_barcode: new copy barcode (11/12/13XXXX)
-        copy_num: copy number (2, 3, or 4)
-        meta: dict with home_branch, hold_branch, item_type, call_no, date
-
-    Returns: (success: bool, message: str)
-    """
-    try:
-        import xml.etree.ElementTree as ET
-        import mysql.connector
-
-        # Read MySQL credentials from koha-conf.xml
-        koha_conf = '/etc/koha/sites/dishari_lib/koha-conf.xml'
-        tree = ET.parse(koha_conf)
-        root = tree.getroot()
-
-        def get_elem(tag):
-            el = root.find(f'.//{tag}')
-            return el.text.strip() if el is not None and el.text else ''
-
-        db_host = get_elem('hostname') or 'localhost'
-        db_name = get_elem('database')
-        db_user = get_elem('user')
-        db_pass = get_elem('pass')
-
-        if not (db_name and db_user):
-            return False, 'Could not read Koha MySQL credentials from koha-conf.xml'
-
-        # Connect to MySQL
-        cnx = mysql.connector.connect(
-            host=db_host,
-            user=db_user,
-            password=db_pass,
-            database=db_name
-        )
-        cursor = cnx.cursor()
-
-        # Look up existing item by primary barcode
-        cursor.execute('SELECT biblionumber, biblioitemnumber FROM items WHERE barcode = %s', (dup_barcode,))
-        row = cursor.fetchone()
-        if not row:
-            return False, f'No item found with barcode {dup_barcode}'
-
-        biblionumber, biblioitemnumber = row
-
-        # Insert new item
-        home_branch = meta.get('home_branch', 'DFL')
-        hold_branch = meta.get('hold_branch', 'DFL')
-        item_type = meta.get('item_type', 'BK')
-        call_no = meta.get('call_no', '891')
-        date_str = meta.get('date', '')
-
-        cursor.execute('''
-            INSERT INTO items
-            (biblionumber, biblioitemnumber, barcode, homebranch, holdingbranch,
-             itype, itemcallnumber, dateaccessioned, copynumber)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (biblionumber, biblioitemnumber, copy_barcode, home_branch, hold_branch,
-              item_type, call_no, date_str, copy_num))
-
-        cnx.commit()
-        cursor.close()
-        cnx.close()
-
-        return True, f'Copy item added: barcode {copy_barcode}'
-
-    except Exception as exc:
-        return False, f'Error adding copy item: {str(exc)}'
-
-
-# ── Koha import ────────────────────────────────────────────────────────────
-def import_to_koha(mrc_path: str) -> tuple[bool, str]:
-    """
-    Import MARC file via bulkmarcimport.pl on the Koha server.
-
-    Copies the file to /tmp first (Koha user can't access /home/dishari).
-    Uses --insert to add new bibs only. COPY records are handled separately
-    via add_copy_item_to_koha() which directly inserts items via Koha API.
-
-    Returns (success, message).
-    """
-    import shutil
-    if not shutil.which('koha-shell'):
-        return False, 'koha-shell not found — not running on the Koha server.'
-    try:
-        # Copy to /tmp so Koha user can read it (home dir is not accessible)
-        tmp_mrc = Path('/tmp') / f'catalog_import_{Path(mrc_path).stem}.mrc'
-        shutil.copy2(mrc_path, tmp_mrc)
-
-        try:
-            cmd = [
-                'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
-                f'/usr/share/koha/bin/migration_tools/bulkmarcimport.pl -b --insert -file {shlex.quote(str(tmp_mrc))}'
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True,
-                                   stdin=subprocess.DEVNULL, timeout=180)
-            if result.returncode == 0:
-                return True, result.stdout or 'Import completed.'
-            return False, f'Import exited {result.returncode}:\n{result.stderr}'
-        finally:
-            # Clean up temp file
-            tmp_mrc.unlink(missing_ok=True)
-    except FileNotFoundError:
-        return False, 'koha-shell not found — not running on the Koha server.'
-    except subprocess.TimeoutExpired:
-        return False, 'Import timed out after 3 minutes.'
-    except Exception as exc:
-        return False, str(exc)
-
-
-def rollback_registry(source_file: str) -> int:
-    """
-    Delete all registry entries from a failed import session.
-    Returns count of rows deleted.
-    """
-    with sqlite3.connect(str(DB_PATH)) as conn:
-        cur = conn.execute('DELETE FROM books WHERE source_file=?', (source_file,))
-        deleted = cur.rowcount
-        conn.commit()
-        if deleted > 0:
-            logging.info(f'Rolled back {deleted} registry entries for source_file={source_file}')
-    return deleted
-
-
-def create_label_pdf(barcodes: list[str], pdf_path: str) -> tuple[bool, str]:
-    """
-    Create a Koha label batch and export it as a PDF via koha-shell.
-    The PDF is written to pdf_path by the Perl script.
-    Returns (success, message).
-    Only callable on the Koha server where koha-shell is present.
-    """
-    if not shutil.which('koha-shell'):
-        return False, 'koha-shell not found — not running on the Koha server.'
-    if not LABEL_SCRIPT.exists():
-        return False, f'{LABEL_SCRIPT.name} not found in app directory.'
-
-    barcode_str = ','.join(b for b in barcodes if b)
-    if not barcode_str:
-        return False, 'No barcodes provided.'
-
-    try:
-        cmd = [
-            'sudo', 'koha-shell', KOHA_INSTANCE, '-c',
-            f'perl {shlex.quote(str(LABEL_SCRIPT))} '
-            f'{shlex.quote(barcode_str)} '
-            f'{KOHA_LABEL_TEMPLATE_ID} '
-            f'{KOHA_LABEL_LAYOUT_ID} '
-            f'{shlex.quote(pdf_path)}'
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True,
-                             stdin=subprocess.DEVNULL, timeout=60)
-        if res.returncode != 0:
-            return False, (res.stderr or res.stdout or 'Script exited non-zero').strip()
-        # Result line (batch_id:items_added) is written to STDERR by the Perl script
-        # because STDOUT is redirected to the PDF file.
-        return True, res.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return False, 'Label PDF generation timed out.'
-    except Exception as exc:
-        return False, str(exc)
 
 
 # ── CSRF protection ────────────────────────────────────────────────────────
@@ -1370,7 +1194,6 @@ def process(sid):
     new_book_count = 0
     skipped_reg    = 0
     engine_errors  = ''
-    label_barcodes = []     # accumulates all barcodes inserted this session
 
     if new_rows:
         tmp_xlsx = tempfile.NamedTemporaryFile(
@@ -1393,7 +1216,6 @@ def process(sid):
                 processed = catalog_engine.extract_processed_books(audit_path)
                 skipped_reg, reg_warnings = register_books(processed, data['filename'])
                 new_book_count = len(processed)
-                label_barcodes.extend(b['barcode'] for b in processed if b.get('barcode'))
                 if reg_warnings:
                     engine_errors = (engine_errors + '\n' + reg_warnings).strip()
 
@@ -1456,12 +1278,12 @@ def process(sid):
 
                     actual_copy_bc = _prefix_map[next_num] + dup_bc[2:]
 
-                    # Add item to existing Koha bib via Perl API (not via MARC)
-                    copy_ok, copy_msg = add_copy_item_to_koha(dup_bc, actual_copy_bc, next_num, meta)
-                    if copy_ok:
-                        label_barcodes.append(actual_copy_bc)
-                    else:
-                        engine_errors += f'\nRow {meta["idx"]}: {copy_msg}'
+                    # Generate a MARC record for this copy so it can be imported
+                    # manually via Koha's Stage MARC Records interface.
+                    # 999$c carries the biblionumber for exact Local-Number matching.
+                    biblionumber = get_biblionumber(dup_bc)
+                    copy_marc = catalog_engine.generate_copy_marc(meta, actual_copy_bc, next_num, biblionumber=biblionumber)
+                    mrc_bytes += copy_marc
 
                     if isbn_clean:
                         conn.execute('UPDATE books SET copies=copies+1 WHERE isbn=?', (isbn_clean,))
@@ -1470,6 +1292,7 @@ def process(sid):
                             'UPDATE books SET copies=copies+1 '
                             'WHERE title_norm=? AND author_norm=?', (nt, na)
                         )
+
             copy_count += 1
         except Exception as exc:
             engine_errors += f'\nCopy error row {cr["meta"]["idx"]}: {exc}'
@@ -1480,28 +1303,6 @@ def process(sid):
         mrc_out_path = str(OUTPUT_DIR / f'{sid}.mrc')
         with open(mrc_out_path, 'wb') as f:
             f.write(mrc_bytes)
-
-    # ── Attempt Koha import ───────────────────────────────────────────────
-    import_ok  = False
-    import_msg = ''
-    if mrc_out_path:
-        import_ok, import_msg = import_to_koha(mrc_out_path)
-        # Auto-rollback registry if import failed
-        if not import_ok and new_book_count > 0:
-            rolled_back = rollback_registry(data['filename'])
-            import_msg += f'\n[Rolled back {rolled_back} registry entries]'
-            new_book_count = 0
-            label_barcodes = []
-
-    # ── Generate Koha label PDF (only when import succeeded) ─────────────
-    labels_path = None
-    if import_ok and label_barcodes:
-        pdf_out = str(OUTPUT_DIR / f'{sid}_labels.pdf')
-        ok, lmsg = create_label_pdf(label_barcodes, pdf_out)
-        if ok and Path(pdf_out).exists():
-            labels_path = pdf_out
-        elif not ok:
-            engine_errors = (engine_errors + f'\nLabel PDF: {lmsg}').strip()
 
     # ── Save result to session ────────────────────────────────────────────
     data['result'] = {
@@ -1518,10 +1319,7 @@ def process(sid):
         'mrc_path':      mrc_out_path,
         'audit_path':    audit_path,
         'errors_path':   errors_path,
-        'import_ok':     import_ok,
-        'import_msg':    import_msg,
         'engine_errors': engine_errors,
-        'labels_path':   labels_path,
     }
     save_session(sid, data)
 
@@ -1562,6 +1360,40 @@ def download(sid, filetype):
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+def get_biblionumber(barcode: str) -> str:
+    """
+    Return the Koha biblionumber for a given item barcode by querying MySQL.
+    Reads credentials from koha-conf.xml. Returns '' on any failure.
+    """
+    try:
+        import xml.etree.ElementTree as ET
+        tree = ET.parse(KOHA_CONF)
+        root = tree.getroot()
+        def _g(tag):
+            el = root.find(f'.//{tag}')
+            return el.text.strip() if el is not None and el.text else ''
+        db_host = _g('hostname') or 'localhost'
+        db_name = _g('database')
+        db_user = _g('user')
+        db_pass = _g('pass')
+        if not db_name:
+            logging.warning('get_biblionumber: could not read DB name from %s', KOHA_CONF)
+            return ''
+        # Use sudo mysql (root access) — kohauser is restricted to koha process only
+        sql = f"SELECT biblionumber FROM items WHERE barcode='{barcode}' LIMIT 1"
+        cmd = ['sudo', 'mysql', db_name, '-N', '--batch', '-e', sql]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            logging.warning('get_biblionumber: mysql error for barcode %s: %s', barcode, result.stderr.strip())
+            return ''
+        bn = result.stdout.strip()
+        logging.info('get_biblionumber: barcode=%s → biblionumber=%s', barcode, bn or '(not found)')
+        return bn
+    except Exception as exc:
+        logging.warning('get_biblionumber: exception for barcode %s: %s', barcode, exc)
+        return ''
+
 
 def _write_xlsx(rows: list, out_path: str):
     """Write a list of {'cols': [...40 values...]} to an XLSX file clean_catalog.py can read."""

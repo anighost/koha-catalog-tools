@@ -157,7 +157,7 @@ certbot will:
 - Set up HTTP → HTTPS redirect
 - Enable auto-renewal
 
-Status: ⬜ Pending
+Status: ✅ Done (2026-04-18 — cert expires 2026-07-17)
 
 ---
 
@@ -166,7 +166,7 @@ Status: ⬜ Pending
 In Cloudflare dashboard → SSL/TLS → Encryption level, set to **Full (strict)** mode.
 This ensures Cloudflare trusts your origin certificate.
 
-Status: ⬜ Pending
+Status: ⏳ Pending (set to Full Strict in Cloudflare dashboard)
 
 ---
 
@@ -178,7 +178,7 @@ Add a CNAME record in Cloudflare:
 |------|------|--------|-------|
 | CNAME | catalog | aluposto.ddns.net | ✅ Proxied |
 
-Status: ⬜ Pending
+Status: ✅ Done (2026-04-18)
 
 ---
 

@@ -116,7 +116,7 @@ def run(input_path: str) -> dict:
     }
 
 
-def generate_copy_marc(fields: dict, copy_barcode: str, copy_num: int = 2) -> bytes:
+def generate_copy_marc(fields: dict, copy_barcode: str, copy_num: int = 2, biblionumber: str = '') -> bytes:
     """
     Build a MARC record for adding a physical copy to an existing bib.
 
@@ -172,11 +172,17 @@ def generate_copy_marc(fields: dict, copy_barcode: str, copy_num: int = 2) -> by
     itype = _s('item_type', 'BK') or 'BK'
     rec.add_field(Field('942', [' ', ' '], subfields=[Subfield('c', itype)]))
 
+    # 999 — Koha internal bib ID for Local-Number matching
+    # Allows the match rule to locate the exact existing bib regardless of
+    # title/author/ISBN variations. Only added when biblionumber is known.
+    if biblionumber:
+        rec.add_field(Field('999', [' ', ' '], subfields=[Subfield('c', biblionumber)]))
+
     # 952 — Item/holdings (parity with clean_catalog.py)
     home  = _s('home_branch', 'DFL') or 'DFL'
     hold  = _s('hold_branch', 'DFL') or 'DFL'
     call  = _s('call_no',     '891') or '891'
-    date  = _s('date') or datetime.now().strftime('%Y-%m-%d')
+    date  = (_s('date') or datetime.now().strftime('%Y-%m-%d')).split(' ')[0].split('T')[0]
     ccode = _s('ccode')
     cost  = _s('cost')
 
@@ -198,8 +204,9 @@ def generate_copy_marc(fields: dict, copy_barcode: str, copy_num: int = 2) -> by
     buf = io.BytesIO()
     w = MARCWriter(buf)
     w.write(rec)
+    data = buf.getvalue()
     w.close()
-    return buf.getvalue()
+    return data
 
 
 def extract_processed_books(audit_path: str) -> list:

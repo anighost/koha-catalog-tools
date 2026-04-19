@@ -4,10 +4,10 @@
 # Mirrors label-create-pdf.pl exactly, without CGI/auth overhead.
 #
 # Usage (inside koha-shell):
-#   perl /path/to/create_label_batch.pl BARCODE1,BARCODE2,... TEMPLATE_ID LAYOUT_ID OUTPUT_PDF_PATH
+#   perl /path/to/create_label_batch.pl BARCODE1,BARCODE2,... TEMPLATE_ID LAYOUT_ID
 #
-# Writes the label PDF to OUTPUT_PDF_PATH and prints one line to stdout:
-#   batch_id:items_added
+# Writes the label PDF to STDOUT (binary) so the caller can capture it directly.
+# Prints one status line to STDERR: batch_id:items_added
 #
 # Dies with an error message on failure.
 
@@ -16,9 +16,9 @@ use C4::Context;
 use C4::Creators;
 use C4::Labels;
 
-my ($barcode_str, $template_id, $layout_id, $output_path) = @ARGV;
-die "Usage: $0 barcodes template_id layout_id output_pdf_path\n"
-    unless $barcode_str && $output_path;
+my ($barcode_str, $template_id, $layout_id) = @ARGV;
+die "Usage: $0 barcodes template_id layout_id\n"
+    unless $barcode_str;
 
 $template_id //= 1;   # Avery 5160 | 1 x 2-5/8
 $layout_id   //= 17;  # Dishari Label
@@ -62,8 +62,8 @@ for my $bc (@barcodes) {
 die "No items were added to batch (barcodes not found in Koha?)\n" unless $added;
 
 # ── Generate PDF — mirrors label-create-pdf.pl exactly ────────────────────
-# Redirect STDOUT to the output file so C4::Creators::PDF writes there.
-open(STDOUT, '>:raw', $output_path) or die "Cannot write to $output_path: $!\n";
+# PDF bytes go to STDOUT (binary); caller captures them directly.
+binmode(STDOUT, ':raw');
 
 our $pdf      = C4::Creators::PDF->new(InitVars => 0);
 my  $batch    = C4::Labels::Batch->retrieve(batch_id => $batch_id);
@@ -204,7 +204,6 @@ LABEL_ITEMS: foreach my $item (@{$items}) {
 }
 
 $pdf->End();
-close(STDOUT);
 
-# Print result to STDERR so the Flask app can read it (STDOUT is the PDF file now)
+# Status line to STDERR; STDOUT carries the PDF bytes
 print STDERR "$batch_id:$added\n";

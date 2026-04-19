@@ -1,5 +1,5 @@
 {
-    "last_primary_barcode": 102057,
+    "last_primary_barcode": 102089,
     "synonyms_publisher": {
         "Ananda Publishers": [
             "ananda",
@@ -249,5 +249,5 @@
         ]
     },
     "fuzzy_author_threshold": 88,
-    "previous_last_primary_barcode": 100000
+    "previous_last_primary_barcode": 102057
 }
