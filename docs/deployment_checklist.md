@@ -11,9 +11,9 @@
 
 ```bash
 cd /Users/anirbanghosh/Code/koha-catalog-tools
-git add .gitignore catalog-app/
+git add catalog-app/ docs/
 git status   # confirm dedup_registry.db is NOT staged
-git commit -m "Add normalize_edition, fix process button, add label PDF generation"
+git commit -m "..."
 git push
 ```
 
@@ -29,11 +29,6 @@ rsync -av -e "ssh -p 2222" \
 --exclude='uploads/' --exclude='output/' --exclude='sessions/' \
 /Users/anirbanghosh/Code/koha-catalog-tools/catalog-app/ \
 dishari@aluposto.ddns.net:/home/dishari/koha-catalog-tools/catalog-app/
-```
-
-After each rsync, make the label script executable:
-```bash
-ssh -p 2222 dishari@aluposto.ddns.net "chmod +x /home/dishari/koha-catalog-tools/catalog-app/create_label_batch.pl"
 ```
 
 Status: ✅ Done
@@ -60,28 +55,28 @@ ln -s /home/dishari/koha-catalog-tools/koha_session_meta.json \
       /home/dishari/koha-catalog-tools/catalog-app/koha_session_meta.json
 ```
 
-**Important:** Never use the local test copy (`catalog-app/koha_session_meta.json`
-with barcode 109000) in production.
+**Important:** Never reset `koha_session_meta.json` — it contains the barcode
+counter (`last_primary_barcode`) and all hand-curated synonym dictionaries.
+The counter must always stay ahead of the highest barcode in Koha.
 
 Status: ✅ Done
 
 ---
 
-## Step 5 — sudoers for koha-shell
+## Step 5 — sudoers rules
 
-Allows the Flask app (running as `dishari`) to invoke `bulkmarcimport.pl`
-and `create_label_batch.pl` via `koha-shell` without a password.
+Two rules required — one for `koha-shell` (legacy, kept for manual use) and
+one for `mysql` (used by `get_biblionumber` and `backfill_registry.py`):
 
 ```bash
 sudo visudo -f /etc/sudoers.d/catalog-app
 ```
 
-Add:
+Contents:
 ```
 dishari ALL=(root) NOPASSWD: /usr/sbin/koha-shell dishari_lib -c *
+dishari ALL=(root) NOPASSWD: /usr/bin/mysql
 ```
-
-The wildcard covers both `bulkmarcimport.pl` and `create_label_batch.pl` — no separate rule needed.
 
 Status: ✅ Done (2026-04-18)
 
@@ -108,7 +103,7 @@ To restart after code updates:
 sudo systemctl restart catalog-app
 ```
 
-Status: ✅ Done (running, --timeout 300, label IDs set)
+Status: ✅ Done (running)
 
 ---
 
@@ -140,22 +135,10 @@ Status: ✅ Done (2026-04-18)
 
 ## Step 8 — SSL Certificate (Let's Encrypt)
 
-Set up HTTPS on the origin server for end-to-end encryption (Cloudflare → Apache).
-
 ```bash
-# Install certbot
-sudo apt-get update
 sudo apt-get install certbot python3-certbot-apache
-
-# Generate certificate and auto-configure Apache
 sudo certbot --apache -d catalog.disharifoundation.org
 ```
-
-certbot will:
-- Generate the certificate
-- Automatically update your Apache vhost for SSL
-- Set up HTTP → HTTPS redirect
-- Enable auto-renewal
 
 Status: ✅ Done (2026-04-18 — cert expires 2026-07-17)
 
@@ -164,15 +147,12 @@ Status: ✅ Done (2026-04-18 — cert expires 2026-07-17)
 ## Step 9 — Cloudflare SSL Mode
 
 In Cloudflare dashboard → SSL/TLS → Encryption level, set to **Full (strict)** mode.
-This ensures Cloudflare trusts your origin certificate.
 
-Status: ⏳ Pending (set to Full Strict in Cloudflare dashboard)
+Status: ✅ Done
 
 ---
 
 ## Step 10 — Cloudflare DNS
-
-Add a CNAME record in Cloudflare:
 
 | Type | Name | Target | Proxy |
 |------|------|--------|-------|
@@ -182,46 +162,57 @@ Status: ✅ Done (2026-04-18)
 
 ---
 
-## Step 11 — Reset and re-seed SQLite registry
+## Step 11 — Koha match rule for MARC import (KohaBiblio)
 
-G1 added `edition_norm` and changed the unique index. The old registry on the
-server has the pre-G1 schema. Steps must be done in this order:
+The app generates MARC files for **manual import** via Koha Staff Interface →
+Cataloging → Stage MARC Records for Import. The correct settings are:
+
+| Setting | Value |
+|---------|-------|
+| Match rule | **KohaBiblio** |
+| Action on match | **Ignore incoming record** (for copy records — preserves existing bib) |
+| Action on no match | **Add incoming record** |
+| Item handling | **Always add items** |
+
+**KohaBiblio match rule configuration** (set once in Koha Staff → Administration → MARC Bibliographic Framework → Matching Rules):
+
+| Match point | Tag | Subfield | Index | Score |
+|-------------|-----|----------|-------|-------|
+| Local-Number | 999 | c | Local-Number | 100 |
+
+Required score: 100.
+
+- New book records have no `999$c` → no match → new bib + item added ✓
+- Copy records have `999$c` = biblionumber → exact match → bib ignored, item attached ✓
+
+Status: ✅ Done (2026-04-19 — switched from STRICT_CLE to KohaBiblio)
+
+---
+
+## Step 12 — Seed/reload SQLite registry
+
+To clear and reload the dedup registry from Koha:
 
 ```bash
-# 1. Restart app so init_db() runs and migrates the schema (adds edition_norm, recreates idx_dedup)
-sudo systemctl restart catalog-app
+# 1. Clear existing rows
+sqlite3 /home/dishari/koha-catalog-tools/catalog-app/dedup_registry.db \
+    "DELETE FROM books;"
 
-# 2. Wipe the old registry rows (schema is now correct, data is stale)
-sqlite3 /home/dishari/koha-catalog-tools/catalog-app/dedup_registry.db "DELETE FROM books;"
-
-# 3. Re-seed from Koha MySQL
+# 2. Reload from Koha (uses sudo mysql — no credentials needed)
 sudo python3 /home/dishari/koha-catalog-tools/catalog-app/backfill_registry.py
 ```
 
 Expected output:
 ```
 Fetched ~1709 bibs from Koha
-Done — inserted ~1709 new rows, skipped 0 already present.
+Done — inserted ~1667 new rows, skipped ~42 already present.
 ```
 
-**After merging duplicate bibs in Koha:** re-run backfill only (no DELETE needed).
+The ~42 skipped are genuine duplicate bibs already in Koha (same normalized
+title+author+edition). Run this any time the registry drifts from Koha
+(e.g. after direct Koha imports bypassing the app).
 
-Status: ✅ Done (2026-04-18 — 1667 rows from Koha, 42 skipped as duplicates)
-
----
-
-## Step 12 — Verify Koha matching rule
-
-Confirm `STRICT_CLE` exists in Koha:
-
-```bash
-sudo koha-shell dishari_lib -c "perl -e 'use Koha::MatchingRules; print \$_->code.\"\n\" for Koha::MatchingRules->search->as_list'"
-```
-
-If the rule has a different code, update `KOHA_MATCH_RULE` in the systemd
-service file and restart.
-
-Status: ✅ Done — STRICT_CLE confirmed present
+Status: ✅ Done (2026-04-19 — 1667 rows loaded, 42 Koha duplicates skipped)
 
 ---
 
@@ -236,14 +227,16 @@ Status: ✅ Done
 ## Step 14 — End-to-end smoke test
 
 1. Upload a small Gronthee XLSX → review screen shows rows correctly
-2. Process → result screen shows import stats (X new, 0 errors)
-3. Check Koha OPAC → book appears and is searchable
-4. Re-upload same file → all rows flagged DUPLICATE with correct copy action
-5. Upload simultaneously in two tabs → barcodes don't collide (filelock test)
-6. Confirm `koha_session_meta.json` `last_primary_barcode` incremented correctly
-7. Result page shows **Labels PDF** download button → open it → verify barcodes and call numbers are correct for the Dishari Label layout on Avery 5160
+2. Process → result screen shows stats (X new, 0 errors), MARC download available
+3. Download `.mrc` → import manually via Koha Staff → Stage MARC Records
+   (match rule: KohaBiblio, action on match: Ignore, action on no match: Add, items: Always add)
+4. Check Koha OPAC → book appears and is searchable
+5. Re-upload same file → all rows flagged DUPLICATE with `— Select action —` dropdown
+6. Select "Add as Copy 2" → process → download MARC → import → verify copy item attached to existing bib (not new bib)
+7. Upload simultaneously in two tabs → barcodes don't collide (filelock test)
+8. Confirm `koha_session_meta.json` `last_primary_barcode` incremented correctly
 
-Status: ⏳ In progress (2026-04-18)
+Status: ⏳ In progress (2026-04-19)
 
 ---
 
@@ -253,12 +246,9 @@ Status: ⏳ In progress (2026-04-18)
 |----------|-------|---------|
 | `CATALOG_PASSWORD` | set strong password | Shared login for volunteers |
 | `FLASK_SECRET_KEY` | random string | Flask session signing |
-| `KOHA_INSTANCE` | `dishari_lib` | Koha instance for koha-shell |
-| `KOHA_MATCH_RULE` | `STRICT_CLE` | Match rule for bulkmarcimport.pl |
+| `KOHA_INSTANCE` | `dishari_lib` | Koha instance name (used by get_biblionumber) |
 | `CATALOG_SCRIPT` | `../scripts/clean_catalog.py` | Path to clean_catalog.py |
 | `CATALOG_META` | `./koha_session_meta.json` | Path to koha_session_meta.json |
-| `KOHA_LABEL_TEMPLATE_ID` | `1` | Avery 5160 template in creator_templates |
-| `KOHA_LABEL_LAYOUT_ID` | `17` | Dishari Label layout in creator_layouts |
 
 ---
 
@@ -266,7 +256,7 @@ Status: ⏳ In progress (2026-04-18)
 
 ```bash
 # 1. Commit and push locally
-git add catalog-app/ && git commit -m "..." && git push
+git add catalog-app/ docs/ && git commit -m "..." && git push
 
 # 2. Rsync to server
 rsync -av -e "ssh -p 2222" \
@@ -275,13 +265,10 @@ rsync -av -e "ssh -p 2222" \
 /Users/anirbanghosh/Code/koha-catalog-tools/catalog-app/ \
 dishari@aluposto.ddns.net:/home/dishari/koha-catalog-tools/catalog-app/
 
-# 3. Make label script executable
-ssh -p 2222 dishari@aluposto.ddns.net "chmod +x /home/dishari/koha-catalog-tools/catalog-app/create_label_batch.pl"
-
-# 4. If catalog-app.service changed, reload systemd first
+# 3. If catalog-app.service changed, reload systemd first
 ssh -p 2222 dishari@aluposto.ddns.net "sudo systemctl daemon-reload"
 
-# 5. Restart service
+# 4. Restart service
 ssh -p 2222 dishari@aluposto.ddns.net "sudo systemctl restart catalog-app"
 ```
 
@@ -293,13 +280,8 @@ Session JSON files were committed in `bffe884` and `5347cac`. They are no
 longer in the working tree but exist in git history. To purge them:
 
 ```bash
-# Install git-filter-repo if not already installed
 pip install git-filter-repo
-
-# Remove sessions/ from all history
 git filter-repo --path catalog-app/sessions/ --invert-paths
-
-# Force-push (private repo — safe, only you use it)
 git push origin main --force
 ```
 
@@ -311,8 +293,5 @@ Status: ⬜ Pending (non-blocking — no secrets in sessions files)
 
 ## Duplicate bib cleanup (pending)
 
-~29 duplicate bib records identified in Koha MySQL (same title/author/edition).
-Steps to merge: see `docs/catalog-app-functional-spec.md` or run the
-**"Duplicate Bibs — Pending Review"** Koha report.
-
-After merging, always resync the registry (Step 9).
+~42 duplicate bib records identified in Koha (same normalized title/author/edition).
+After merging duplicates in Koha Staff, re-run backfill (Step 12) to resync the registry.
