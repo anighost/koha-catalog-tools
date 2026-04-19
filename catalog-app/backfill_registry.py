@@ -93,12 +93,12 @@ def fetch_koha_books(db_name: str) -> list[dict]:
         "SELECT b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement,"
         " MIN(CASE WHEN i.barcode LIKE '10%' THEN i.barcode END) AS primary_barcode,"
         " COUNT(i.itemnumber) AS copies,"
-        " bi.publishercode, bi.publicationyear, bi.pages"
+        " bi.publishercode, COALESCE(bi.publicationyear, b.copyrightdate), bi.pages"
         " FROM biblio b"
         " JOIN biblioitems bi USING(biblionumber)"
         " LEFT JOIN items i USING(biblionumber)"
         " GROUP BY b.biblionumber, b.title, b.author, bi.isbn, bi.editionstatement,"
-        " bi.publishercode, bi.publicationyear, bi.pages"
+        " bi.publishercode, bi.publicationyear, b.copyrightdate, bi.pages"
         " HAVING primary_barcode IS NOT NULL;"
     )
 
